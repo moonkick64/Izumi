@@ -1,4 +1,4 @@
-"""LLM SCA review view – UNKNOWN component analysis with 3 LLM options."""
+"""LLM SCA review view – file-level analysis with 3 LLM options."""
 
 from __future__ import annotations
 
@@ -9,10 +9,12 @@ from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
+    QComboBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPlainTextEdit,
     QProgressBar,
@@ -23,17 +25,37 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from PySide6.QtGui import QColor
 
-from analyzer.classifier import Classification
+from analyzer.classifier import Classification, ClassificationResult, ClassifiedFile
 from analyzer.models import Component, FunctionSummary
+from analyzer.parser import extract_functions
 from llm.local_llm import LocalLLM
 from llm.external_llm import ExternalLLM
 
 
+# ── Classification filter options ──────────────────────────────────────────────
+
+_FILTER_ALL      = "全て"
+_FILTER_UNKNOWN  = "UNKNOWN のみ"
+_FILTER_INFERRED = "INFERRED のみ"
+_FILTER_CONFIRMED = "CONFIRMED のみ"
+
+_CLASS_BG: dict[Classification, str] = {
+    Classification.CONFIRMED: "#d4edda",
+    Classification.INFERRED:  "#fff3cd",
+    Classification.UNKNOWN:   "#f8d7da",
+}
+_CLASS_FG: dict[Classification, str] = {
+    Classification.CONFIRMED: "#155724",
+    Classification.INFERRED:  "#856404",
+    Classification.UNKNOWN:   "#721c24",
+}
+
 # ── LLM option constants ───────────────────────────────────────────────────────
 
-OPTION_1_LOCAL_DIRECT = 1
-OPTION_2_LOCAL_SUMMARY = 2
+OPTION_1_LOCAL_DIRECT    = 1
+OPTION_2_LOCAL_SUMMARY   = 2
 OPTION_3_EXTERNAL_DIRECT = 3
 
 
@@ -42,8 +64,8 @@ OPTION_3_EXTERNAL_DIRECT = 3
 class _DirectQueryWorker(QThread):
     """Runs a direct OSS identification query (Option 1 or 3) in background."""
 
-    finished = Signal(str)   # hint text
-    error = Signal(str)
+    finished = Signal(str)
+    error    = Signal(str)
 
     def __init__(self, source_code: str, llm_callable) -> None:
         super().__init__()
@@ -59,24 +81,34 @@ class _DirectQueryWorker(QThread):
 
 
 class _SummariseWorker(QThread):
-    """Summarises a component's functions via local LLM (Option 2 step a–b)."""
+    """Extracts and summarises functions in a single file (Option 2 step a–b)."""
 
-    progress = Signal(int, int, str)
-    finished = Signal(object)  # Component
-    error = Signal(str)
+    progress = Signal(int, int, str)   # current, total, function_name
+    finished = Signal(list)            # list[FunctionSummary]
+    error    = Signal(str)
 
-    def __init__(self, component: Component, llm: LocalLLM) -> None:
+    def __init__(self, file_path: Path, llm: LocalLLM) -> None:
         super().__init__()
-        self._component = component
+        self._file_path = file_path
         self._llm = llm
 
     def run(self) -> None:
         try:
-            self._llm.summarise_component(
-                self._component,
-                progress_callback=lambda i, n, name: self.progress.emit(i, n, name),
-            )
-            self.finished.emit(self._component)
+            functions = extract_functions(self._file_path)
+            summaries: list[FunctionSummary] = []
+            for i, fn in enumerate(functions):
+                if not self.isInterruptionRequested():
+                    self.progress.emit(i, len(functions), fn.name)
+                summary_text = self._llm.summarise_function(fn.body)
+                summaries.append(FunctionSummary(
+                    function_name=fn.name,
+                    file_path=fn.file_path,
+                    start_line=fn.start_line,
+                    end_line=fn.end_line,
+                    body=fn.body,
+                    summary=summary_text,
+                ))
+            self.finished.emit(summaries)
         except Exception as exc:
             self.error.emit(str(exc))
 
@@ -84,19 +116,25 @@ class _SummariseWorker(QThread):
 # ── Main view ──────────────────────────────────────────────────────────────────
 
 class ReviewView(QWidget):
-    """Screen 3: LLM SCA review for UNKNOWN components."""
+    """Screen 3: LLM SCA review at the source file level."""
 
-    back_requested = Signal()
+    back_requested   = Signal()
     export_requested = Signal(list)  # list[Component]
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._all_files: list[ClassifiedFile] = []
         self._components: list[Component] = []
-        self._current_component: Optional[Component] = None
+        self._source_root: Optional[Path] = None
+        self._current_file: Optional[ClassifiedFile] = None
         self._current_summary_index: int = -1
         self._worker: Optional[QThread] = None
 
-        self._local_llm = LocalLLM()
+        # Per-file LLM result storage
+        self._file_hints: dict[Path, str] = {}
+        self._file_summaries: dict[Path, list[FunctionSummary]] = {}
+
+        self._local_llm  = LocalLLM()
         self._external_llm = ExternalLLM()
 
         self._build_ui()
@@ -111,21 +149,31 @@ class ReviewView(QWidget):
         api_key: str = "",
     ) -> None:
         """Apply LLM settings from the settings view."""
-        self._local_llm = LocalLLM(model=local_model, api_base=ollama_url)
+        self._local_llm   = LocalLLM(model=local_model, api_base=ollama_url)
         self._external_llm = ExternalLLM(model=external_model, api_key=api_key)
 
-    def set_components(self, components: list[Component]) -> None:
-        self._components = components
-        self._refresh_component_list()
+    def set_data(
+        self,
+        classification: ClassificationResult,
+        components: list[Component],
+        source_root: Optional[Path] = None,
+    ) -> None:
+        self._all_files   = classification.all_files
+        self._components  = components
+        self._source_root = source_root
+        self._file_hints.clear()
+        self._file_summaries.clear()
+        self._current_file = None
+        self._refresh_file_list()
 
     # ── UI ─────────────────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
+        root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(8)
 
-        root.addWidget(QLabel("UNKNOWN コンポーネントの LLM SCA レビュー"))
+        root.addWidget(QLabel("LLM SCA レビュー（ソースファイル単位）"))
 
         # ── LLM option selector ────────────────────────────────────────────────
         option_group = QGroupBox("LLM 解析オプション")
@@ -153,19 +201,32 @@ class ReviewView(QWidget):
         option_layout.addWidget(self._opt3_radio)
         root.addWidget(option_group)
 
-        # ── Main splitter: left=component list, right=detail ───────────────────
+        # ── Main splitter: left=file list, right=detail ────────────────────────
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        root.addWidget(splitter)
+        root.addWidget(splitter, 1)
 
-        # Left: component list + action button
+        # Left: filter + file list + action button
         left = QWidget()
         left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.addWidget(QLabel("コンポーネント一覧"))
+        left_layout.setContentsMargins(0, 0, 4, 0)
 
-        self._component_list = QListWidget()
-        self._component_list.currentRowChanged.connect(self._on_component_selected)
-        left_layout.addWidget(self._component_list)
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(QLabel("表示:"))
+        self._filter_combo = QComboBox()
+        self._filter_combo.addItems([
+            _FILTER_UNKNOWN,
+            _FILTER_ALL,
+            _FILTER_INFERRED,
+            _FILTER_CONFIRMED,
+        ])
+        self._filter_combo.currentTextChanged.connect(self._refresh_file_list)
+        filter_row.addWidget(self._filter_combo)
+        left_layout.addLayout(filter_row)
+
+        left_layout.addWidget(QLabel("ファイル一覧"))
+        self._file_list = QListWidget()
+        self._file_list.currentRowChanged.connect(self._on_file_selected)
+        left_layout.addWidget(self._file_list)
 
         self._action_btn = QPushButton("LLM で解析")
         self._action_btn.clicked.connect(self._on_action_clicked)
@@ -173,12 +234,17 @@ class ReviewView(QWidget):
 
         splitter.addWidget(left)
 
-        # Right: stacked detail panels
+        # Right: detail panels
         right = QWidget()
         self._right_layout = QVBoxLayout(right)
-        self._right_layout.setContentsMargins(0, 0, 0, 0)
+        self._right_layout.setContentsMargins(4, 0, 0, 0)
 
-        # -- Option 2 panel (summary edit + approve) --
+        # File header
+        self._file_header = QLabel("")
+        self._file_header.setWordWrap(True)
+        self._right_layout.addWidget(self._file_header)
+
+        # Option 2 panel (summary edit + approve)
         self._opt2_panel = QWidget()
         opt2_layout = QVBoxLayout(self._opt2_panel)
         opt2_layout.setContentsMargins(0, 0, 0, 0)
@@ -212,7 +278,7 @@ class ReviewView(QWidget):
 
         self._right_layout.addWidget(self._opt2_panel)
 
-        # -- Hint display (shared across all options) --
+        # Hint display (shared across all options)
         hint_group = QGroupBox("LLMからのヒント（参考情報・確定情報ではありません）")
         hint_layout = QVBoxLayout(hint_group)
         self._hint_edit = QTextEdit()
@@ -222,7 +288,7 @@ class ReviewView(QWidget):
         self._right_layout.addWidget(hint_group)
 
         splitter.addWidget(right)
-        splitter.setSizes([250, 750])
+        splitter.setSizes([280, 820])
 
         # Progress bar
         self._progress_bar = QProgressBar()
@@ -242,6 +308,39 @@ class ReviewView(QWidget):
 
         self._update_ui_for_option(OPTION_2_LOCAL_SUMMARY)
 
+    # ── Filter & file list ─────────────────────────────────────────────────────
+
+    def _filtered_files(self) -> list[ClassifiedFile]:
+        sel = self._filter_combo.currentText()
+        if sel == _FILTER_UNKNOWN:
+            return [f for f in self._all_files if f.classification == Classification.UNKNOWN]
+        if sel == _FILTER_INFERRED:
+            return [f for f in self._all_files if f.classification == Classification.INFERRED]
+        if sel == _FILTER_CONFIRMED:
+            return [f for f in self._all_files if f.classification == Classification.CONFIRMED]
+        return list(self._all_files)
+
+    def _refresh_file_list(self) -> None:
+        self._file_list.clear()
+        files = self._filtered_files()
+        for cf in files:
+            label = self._file_label(cf)
+            item = QListWidgetItem(label)
+            item.setBackground(QColor(_CLASS_BG[cf.classification]))
+            item.setForeground(QColor(_CLASS_FG[cf.classification]))
+            self._file_list.addItem(item)
+        if files:
+            self._file_list.setCurrentRow(0)
+
+    def _file_label(self, cf: ClassifiedFile) -> str:
+        path = cf.file_info.path
+        if self._source_root:
+            try:
+                path = path.relative_to(self._source_root)
+            except ValueError:
+                pass
+        return f"[{cf.classification.value}] {path}"
+
     # ── Option switching ───────────────────────────────────────────────────────
 
     @Slot(int, bool)
@@ -250,12 +349,10 @@ class ReviewView(QWidget):
             self._update_ui_for_option(option_id)
 
     def _update_ui_for_option(self, option_id: int) -> None:
-        is_opt2 = option_id == OPTION_2_LOCAL_SUMMARY
-        self._opt2_panel.setVisible(is_opt2)
-
+        self._opt2_panel.setVisible(option_id == OPTION_2_LOCAL_SUMMARY)
         labels = {
-            OPTION_1_LOCAL_DIRECT: "ローカルLLMで直接解析",
-            OPTION_2_LOCAL_SUMMARY: "ローカルLLMで要約生成",
+            OPTION_1_LOCAL_DIRECT:    "ローカルLLMで直接解析",
+            OPTION_2_LOCAL_SUMMARY:   "ローカルLLMで要約生成",
             OPTION_3_EXTERNAL_DIRECT: "外部LLMで直接解析",
         }
         self._action_btn.setText(labels.get(option_id, "LLM で解析"))
@@ -263,44 +360,58 @@ class ReviewView(QWidget):
     def _selected_option(self) -> int:
         return self._option_btn_group.checkedId()
 
-    # ── Data population ────────────────────────────────────────────────────────
+    # ── File selection ─────────────────────────────────────────────────────────
 
-    def _refresh_component_list(self) -> None:
-        self._component_list.clear()
-        for comp in self._components:
-            self._component_list.addItem(comp.name)
-        if self._components:
-            self._component_list.setCurrentRow(0)
+    @Slot(int)
+    def _on_file_selected(self, row: int) -> None:
+        files = self._filtered_files()
+        if row < 0 or row >= len(files):
+            self._current_file = None
+            self._file_header.setText("")
+            self._hint_edit.clear()
+            self._summary_list.clear()
+            return
+
+        cf = self._current_file = files[row]
+        fg = _CLASS_FG[cf.classification]
+        path = cf.file_info.path
+        display_path = path
+        if self._source_root:
+            try:
+                display_path = path.relative_to(self._source_root)
+            except ValueError:
+                pass
+        self._file_header.setText(
+            f"[{cf.classification.value}]  {display_path}  —  {cf.reason}"
+        )
+        self._file_header.setStyleSheet(
+            f"color: {fg}; background: {_CLASS_BG[cf.classification]}; padding: 2px 4px;"
+        )
+
+        # Restore any existing results for this file
+        hint = self._file_hints.get(path, "")
+        self._hint_edit.setPlainText(hint)
+        self._refresh_summary_list()
+
+    # ── Summary list (Option 2) ────────────────────────────────────────────────
 
     def _refresh_summary_list(self) -> None:
         self._summary_list.clear()
-        if not self._current_component:
+        if not self._current_file:
             return
-        for fs in self._current_component.function_summaries:
+        summaries = self._file_summaries.get(self._current_file.file_info.path, [])
+        for fs in summaries:
             label = (
                 f"{'✓' if fs.approved else '○'} "
-                f"{fs.function_name} ({fs.file_path.name}:{fs.start_line})"
+                f"{fs.function_name} (:{fs.start_line})"
             )
             self._summary_list.addItem(label)
 
-    # ── Slots ──────────────────────────────────────────────────────────────────
-
-    @Slot(int)
-    def _on_component_selected(self, row: int) -> None:
-        if row < 0 or row >= len(self._components):
-            return
-        self._current_component = self._components[row]
-        self._refresh_summary_list()
-        if self._current_component.oss_hint:
-            self._hint_edit.setPlainText(self._current_component.oss_hint)
-        else:
-            self._hint_edit.clear()
-
     @Slot(int)
     def _on_summary_selected(self, row: int) -> None:
-        if not self._current_component or row < 0:
+        if not self._current_file or row < 0:
             return
-        summaries = self._current_component.function_summaries
+        summaries = self._file_summaries.get(self._current_file.file_info.path, [])
         if row >= len(summaries):
             return
         self._current_summary_index = row
@@ -309,15 +420,17 @@ class ReviewView(QWidget):
         self._approve_check.setChecked(fs.approved)
 
     def _on_save_summary(self) -> None:
-        if not self._current_component or self._current_summary_index < 0:
+        if not self._current_file or self._current_summary_index < 0:
             return
-        summaries = self._current_component.function_summaries
+        summaries = self._file_summaries.get(self._current_file.file_info.path, [])
         if self._current_summary_index >= len(summaries):
             return
         fs = summaries[self._current_summary_index]
-        fs.summary = self._summary_edit.toPlainText().strip()
+        fs.summary  = self._summary_edit.toPlainText().strip()
         fs.approved = self._approve_check.isChecked()
         self._refresh_summary_list()
+
+    # ── Action button ──────────────────────────────────────────────────────────
 
     def _on_action_clicked(self) -> None:
         option = self._selected_option()
@@ -331,7 +444,8 @@ class ReviewView(QWidget):
     # ── Option 1 / 3: direct query ─────────────────────────────────────────────
 
     def _run_direct_query(self, use_external: bool) -> None:
-        if not self._current_component:
+        if not self._current_file:
+            QMessageBox.information(self, "未選択", "解析するファイルを選択してください。")
             return
 
         if use_external:
@@ -348,25 +462,17 @@ class ReviewView(QWidget):
         else:
             if not self._local_llm.is_available():
                 QMessageBox.warning(
-                    self,
-                    "Ollama 未接続",
+                    self, "Ollama 未接続",
                     f"Ollama に接続できません ({self._local_llm.api_base})。\n"
                     "Ollama が起動しているか確認してください。",
                 )
                 return
             llm_callable = self._local_llm.query_direct
 
-        # Collect all source code from component files
-        source_parts: list[str] = []
-        for file_path in self._current_component.files:
-            try:
-                source_parts.append(file_path.read_text(errors="replace"))
-            except OSError:
-                pass
-        source_code = "\n\n".join(source_parts)
-
-        if not source_code.strip():
-            QMessageBox.information(self, "ソースなし", "解析対象のソースコードが見つかりません。")
+        try:
+            source_code = self._current_file.file_info.path.read_text(errors="replace")
+        except OSError as exc:
+            QMessageBox.critical(self, "読み込みエラー", str(exc))
             return
 
         self._set_busy(True)
@@ -378,26 +484,26 @@ class ReviewView(QWidget):
     @Slot(str)
     def _on_direct_query_finished(self, hint: str) -> None:
         self._set_busy(False)
-        if self._current_component is not None:
-            self._current_component.oss_hint = hint
+        if self._current_file:
+            self._file_hints[self._current_file.file_info.path] = hint
         self._hint_edit.setPlainText(hint)
 
     # ── Option 2: summarise ────────────────────────────────────────────────────
 
     def _run_summarise(self) -> None:
-        if not self._current_component:
+        if not self._current_file:
+            QMessageBox.information(self, "未選択", "解析するファイルを選択してください。")
             return
         if not self._local_llm.is_available():
             QMessageBox.warning(
-                self,
-                "Ollama 未接続",
+                self, "Ollama 未接続",
                 f"Ollama に接続できません ({self._local_llm.api_base})。\n"
                 "Ollama が起動しているか確認してください。",
             )
             return
 
         self._set_busy(True)
-        self._worker = _SummariseWorker(self._current_component, self._local_llm)
+        self._worker = _SummariseWorker(self._current_file.file_info.path, self._local_llm)
         self._worker.progress.connect(self._on_summarise_progress)
         self._worker.finished.connect(self._on_summarise_finished)
         self._worker.error.connect(self._on_worker_error)
@@ -408,30 +514,34 @@ class ReviewView(QWidget):
         self._progress_bar.setRange(0, total)
         self._progress_bar.setValue(current)
 
-    @Slot(object)
-    def _on_summarise_finished(self, component: Component) -> None:
+    @Slot(list)
+    def _on_summarise_finished(self, summaries: list[FunctionSummary]) -> None:
         self._set_busy(False)
+        if self._current_file:
+            self._file_summaries[self._current_file.file_info.path] = summaries
         self._refresh_summary_list()
 
     def _on_send_external(self) -> None:
-        if not self._current_component:
+        if not self._current_file:
             return
-        approved = [
-            fs for fs in self._current_component.function_summaries if fs.approved
-        ]
+        summaries = self._file_summaries.get(self._current_file.file_info.path, [])
+        approved = [fs for fs in summaries if fs.approved]
         if not approved:
             QMessageBox.information(
-                self,
-                "承認済み要約なし",
+                self, "承認済み要約なし",
                 "送信する要約を選択し、「承認」チェックボックスをオンにして保存してください。",
             )
             return
 
+        approved_texts = [
+            fs.summary for fs in approved
+            if fs.summary and not fs.summary.startswith("[ERROR]")
+        ]
         try:
-            self._external_llm.analyse_component(self._current_component)
-            self._hint_edit.setPlainText(
-                self._current_component.oss_hint or "ヒントなし"
-            )
+            hint = self._external_llm.find_similar_oss(approved_texts)
+            if self._current_file:
+                self._file_hints[self._current_file.file_info.path] = hint
+            self._hint_edit.setPlainText(hint or "ヒントなし")
         except Exception as exc:
             QMessageBox.critical(self, "外部LLMエラー", str(exc))
 
@@ -444,6 +554,7 @@ class ReviewView(QWidget):
 
     def _set_busy(self, busy: bool) -> None:
         self._action_btn.setEnabled(not busy)
+        self._filter_combo.setEnabled(not busy)
         if busy:
             self._progress_bar.setRange(0, 0)
             self._progress_bar.setVisible(True)

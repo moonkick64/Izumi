@@ -134,7 +134,7 @@ class MainWindow(QMainWindow):
         actions = [
             ("設定", _PAGE_SETTINGS),
             ("スキャン結果", _PAGE_SCAN),
-            ("UNKNOWNレビュー", _PAGE_REVIEW),
+            ("LLM SCAレビュー", _PAGE_REVIEW),
             ("SBOM出力", _PAGE_SBOM),
         ]
         for label, page in actions:
@@ -193,7 +193,7 @@ class MainWindow(QMainWindow):
             f"UNKNOWN={summary['unknown']}"
         )
 
-        self._scan_view.set_data(classification, components)
+        self._scan_view.set_data(classification, components, self._source_dir)
         self._show_page(_PAGE_SCAN)
 
     @Slot(str)
@@ -204,9 +204,14 @@ class MainWindow(QMainWindow):
 
     # ── Review flow ───────────────────────────────────────────────────────
 
-    @Slot(list)
-    def _on_review_requested(self, unknown_components: list[Component]) -> None:
-        self._review_view.set_components(unknown_components)
+    @Slot()
+    def _on_review_requested(self) -> None:
+        if self._classification is not None:
+            self._review_view.set_data(
+                self._classification,
+                self._components,
+                self._source_dir,
+            )
         self._show_page(_PAGE_REVIEW)
 
     # ── Export flow ───────────────────────────────────────────────────────
