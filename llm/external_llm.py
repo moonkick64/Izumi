@@ -1,7 +1,10 @@
 """External LLM integration via LiteLLM.
 
-Responsibility: given user-approved function summaries, find similar OSS.
-Only user-approved summaries (never raw source code) are sent externally.
+Responsibilities:
+- Option 2: given user-approved function summaries, find similar OSS.
+  Only user-approved summaries (never raw source code) are sent externally.
+- Option 3: send raw source code directly to the external LLM.
+  User must explicitly approve this before sending.
 """
 
 from __future__ import annotations
@@ -9,7 +12,7 @@ from __future__ import annotations
 from litellm import completion  # type: ignore[import]
 
 from analyzer.models import Component
-from .prompts import format_oss_similarity_prompt
+from .prompts import format_direct_oss_prompt, format_oss_similarity_prompt
 
 
 class ExternalLLM:
@@ -39,6 +42,25 @@ class ExternalLLM:
             return ""
 
         messages = format_oss_similarity_prompt(summaries)
+        try:
+            response = completion(
+                model=self.model,
+                messages=messages,
+                timeout=self.timeout,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as exc:
+            return f"[ERROR] External LLM call failed: {exc}"
+
+    def query_direct(self, source_code: str) -> str:
+        """Option 3: send *source_code* directly to the external LLM to identify OSS.
+
+        The caller is responsible for obtaining explicit user approval before
+        calling this method, as raw source code leaves the local machine.
+
+        Returns the LLM response as a hint string, or ``[ERROR] …`` on failure.
+        """
+        messages = format_direct_oss_prompt(source_code)
         try:
             response = completion(
                 model=self.model,

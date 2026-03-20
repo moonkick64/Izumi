@@ -1,7 +1,10 @@
 """Local LLM integration via Ollama + LiteLLM.
 
-Responsibility: summarise C/C++ functions into natural language.
-Source code never leaves the local machine at this stage.
+Responsibilities:
+- Option 1: directly identify OSS from raw source code (stays local)
+- Option 2: summarise C/C++ functions into natural language (stays local)
+
+Source code never leaves the local machine via this module.
 """
 
 from __future__ import annotations
@@ -14,7 +17,7 @@ from litellm import completion  # type: ignore[import]
 
 from analyzer.models import Component, FunctionSummary
 from analyzer.parser import extract_functions
-from .prompts import format_summarise_prompt
+from .prompts import format_direct_oss_prompt, format_summarise_prompt
 
 
 class LocalLLM:
@@ -31,6 +34,24 @@ class LocalLLM:
         self.timeout = timeout
 
     # ── Core API ──────────────────────────────────────────────────────────
+
+    def query_direct(self, source_code: str) -> str:
+        """Option 1: send *source_code* directly to the local LLM to identify OSS.
+
+        Returns the LLM response as a hint string, or ``[ERROR] …`` on failure.
+        Source code never leaves the local machine.
+        """
+        messages = format_direct_oss_prompt(source_code)
+        try:
+            response = completion(
+                model=self.model,
+                messages=messages,
+                api_base=self.api_base,
+                timeout=self.timeout,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as exc:
+            return f"[ERROR] Local LLM call failed: {exc}"
 
     def summarise_function(self, function_body: str) -> str:
         """Summarise *function_body* in plain English.
