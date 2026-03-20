@@ -22,9 +22,11 @@ class ExternalLLM:
         self,
         model: str = "claude-sonnet-4-20250514",
         timeout: int = 60,
+        api_key: str = "",
     ) -> None:
         self.model = model
         self.timeout = timeout
+        self.api_key = api_key or None
 
     def find_similar_oss(self, summaries: list[str]) -> str:
         """Query the external LLM with *summaries* and return its response.
@@ -47,6 +49,7 @@ class ExternalLLM:
                 model=self.model,
                 messages=messages,
                 timeout=self.timeout,
+                api_key=self.api_key,
             )
             return response.choices[0].message.content.strip()
         except Exception as exc:
@@ -66,6 +69,7 @@ class ExternalLLM:
                 model=self.model,
                 messages=messages,
                 timeout=self.timeout,
+                api_key=self.api_key,
             )
             return response.choices[0].message.content.strip()
         except Exception as exc:

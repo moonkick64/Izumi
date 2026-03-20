@@ -103,6 +103,17 @@ class ReviewView(QWidget):
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
+    def configure_llm(
+        self,
+        ollama_url: str = "http://localhost:11434",
+        local_model: str = "ollama/codellama",
+        external_model: str = "claude-sonnet-4-20250514",
+        api_key: str = "",
+    ) -> None:
+        """Apply LLM settings from the settings view."""
+        self._local_llm = LocalLLM(model=local_model, api_base=ollama_url)
+        self._external_llm = ExternalLLM(model=external_model, api_key=api_key)
+
     def set_components(self, components: list[Component]) -> None:
         self._components = components
         self._refresh_component_list()

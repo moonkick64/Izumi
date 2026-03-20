@@ -35,9 +35,12 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.source_dir is None:
-        print("GUI mode is not yet implemented. Provide a directory to run in CLI mode.")
-        print("Usage: uv run python main.py <source-tree-dir>")
-        return 1
+        from PySide6.QtWidgets import QApplication
+        from gui.main_window import MainWindow
+        app = QApplication(sys.argv)
+        window = MainWindow()
+        window.show()
+        return app.exec()
 
     source_dir = Path(args.source_dir)
     if not source_dir.is_dir():

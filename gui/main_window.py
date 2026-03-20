@@ -152,6 +152,12 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _on_scan_requested(self, source_dir: Path) -> None:
         self._source_dir = source_dir
+        self._review_view.configure_llm(
+            ollama_url=self._settings_view.ollama_url,
+            local_model=self._settings_view.local_model,
+            external_model=self._settings_view.external_model,
+            api_key=self._settings_view.api_key,
+        )
         self._status_bar.showMessage(f"スキャン中: {source_dir}")
         self._progress_bar.setRange(0, 0)  # Indeterminate
         self._progress_bar.setVisible(True)
