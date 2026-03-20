@@ -1,0 +1,36 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# API keys / local config
+.env
+config.local.json
+~/.sbom-tool/
+
+# SBOM output files (generated artifacts, not source)
+*.spdx
+*.spdx.json
+*.spdx.yaml
+*.spdx.xml
+bom.json
+bom.xml
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
