@@ -192,9 +192,11 @@ uv run python main.py
 
 ---
 
-## コミットメッセージ規約
+## Git 運用方針
 
-- プレフィックス（`feat:` 等）は使わない
+- git操作（commit / push / branch等）は原則ユーザーが行う
+- Claudeはコミット案の提示までとし、実際のgitコマンド実行は行わない
+- コミットメッセージのプレフィックス（`feat:` 等）は使わない
 - 1行目は英語の命令形で簡潔に（例: `Add 3-option LLM analysis UI`）
 - 詳細は箇条書きで記載する
 
