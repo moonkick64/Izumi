@@ -204,13 +204,14 @@ class MainWindow(QMainWindow):
 
     # ── Review flow ───────────────────────────────────────────────────────
 
-    @Slot()
-    def _on_review_requested(self) -> None:
+    @Slot(list)
+    def _on_review_requested(self, selected_paths: list) -> None:
         if self._classification is not None:
             self._review_view.set_data(
                 self._classification,
                 self._components,
                 self._source_dir,
+                preselected_paths=selected_paths or None,
             )
         self._show_page(_PAGE_REVIEW)
 

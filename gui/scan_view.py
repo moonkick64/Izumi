@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QHBoxLayout,
     QLabel,
     QPlainTextEdit,
@@ -38,7 +39,7 @@ _CLASS_FG: dict[Classification, str] = {
 class ScanView(QWidget):
     """Screen 2: VS Code-style file tree with source code viewer."""
 
-    review_requested = Signal()        # navigate to LLM review screen
+    review_requested = Signal(list)    # list[Path] – selected files (empty = all)
     export_requested = Signal(list)   # list[Component] – all
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -107,6 +108,7 @@ class ScanView(QWidget):
         self._tree = QTreeWidget()
         self._tree.setHeaderHidden(True)
         self._tree.setColumnCount(1)
+        self._tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._tree.currentItemChanged.connect(self._on_tree_item_changed)
         left_layout.addWidget(self._tree)
 
@@ -248,7 +250,12 @@ class ScanView(QWidget):
         self._source_view.setPlainText(text)
 
     def _on_review_clicked(self) -> None:
-        self.review_requested.emit()
+        selected_paths: list[Path] = [
+            self._item_to_file[item].file_info.path
+            for item in self._tree.selectedItems()
+            if item in self._item_to_file
+        ]
+        self.review_requested.emit(selected_paths)
 
     def _on_export_clicked(self) -> None:
         self.export_requested.emit(self._components)

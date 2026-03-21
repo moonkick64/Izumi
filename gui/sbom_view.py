@@ -27,6 +27,14 @@ from analyzer.classifier import Classification
 from analyzer.models import Component
 
 
+_FMT_EXTENSIONS: dict[str, str] = {
+    "spdx":     ".spdx",
+    "spdx_json": ".json",
+    "cdx_json":  ".json",
+    "cdx_xml":   ".xml",
+}
+
+
 class SbomView(QWidget):
     """Screen 4: final component confirmation and SBOM file output."""
 
@@ -116,6 +124,19 @@ class SbomView(QWidget):
 
         root.addLayout(btn_row)
 
+    # ── Helpers ───────────────────────────────────────────────────────────
+
+    def _ensure_extension(self, path: Path, fmt: str) -> Path:
+        """Return *path* with the correct extension for *fmt*, adding or replacing if needed."""
+        expected = _FMT_EXTENSIONS.get(fmt, "")
+        if not expected:
+            return path
+        if path.suffix == expected:
+            return path
+        if path.suffix:
+            return path.with_suffix(expected)
+        return Path(str(path) + expected)
+
     # ── Data population ───────────────────────────────────────────────────
 
     def _refresh_table(self) -> None:
@@ -136,11 +157,13 @@ class SbomView(QWidget):
             "cdx_json": "CycloneDX JSON (*.json)",
             "cdx_xml":  "CycloneDX XML (*.xml)",
         }
+        default_name = "sbom" + _FMT_EXTENSIONS.get(fmt, "")
         path, _ = QFileDialog.getSaveFileName(
-            self, "SBOM 出力先", "", filters.get(fmt, "All files (*)")
+            self, "SBOM 出力先", default_name, filters.get(fmt, "All files (*)")
         )
         if path:
-            self._out_edit.setText(path)
+            out_path = self._ensure_extension(Path(path), fmt)
+            self._out_edit.setText(str(out_path))
 
     def _on_export(self) -> None:
         out_path = Path(self._out_edit.text().strip())
@@ -149,6 +172,9 @@ class SbomView(QWidget):
             return
 
         fmt = self._selected_format()
+        out_path = self._ensure_extension(out_path, fmt)
+        self._out_edit.setText(str(out_path))
+
         try:
             if fmt.startswith("spdx"):
                 from sbom.spdx_writer import write_spdx

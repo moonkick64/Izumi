@@ -102,6 +102,56 @@ class TestSbomView:
         assert out.exists()
         assert "zlib" in out.read_text()
 
+    def test_ensure_extension_adds_missing(self, qtbot, tmp_path):
+        view = SbomView()
+        qtbot.addWidget(view)
+
+        # No extension → should add the correct one
+        path = tmp_path / "sbom"
+        result = view._ensure_extension(path, "spdx")
+        assert result.suffix == ".spdx"
+
+    def test_ensure_extension_replaces_wrong(self, qtbot, tmp_path):
+        view = SbomView()
+        qtbot.addWidget(view)
+
+        # Wrong extension → should replace
+        path = tmp_path / "sbom.txt"
+        result = view._ensure_extension(path, "cdx_xml")
+        assert result.suffix == ".xml"
+        assert result.stem == "sbom"
+
+    def test_ensure_extension_keeps_correct(self, qtbot, tmp_path):
+        view = SbomView()
+        qtbot.addWidget(view)
+
+        # Already correct extension → unchanged
+        path = tmp_path / "sbom.json"
+        result = view._ensure_extension(path, "spdx_json")
+        assert result == path
+
+    @patch("gui.sbom_view.QMessageBox.information")
+    def test_export_auto_adds_extension(self, mock_info, qtbot, tmp_path):
+        view = SbomView()
+        qtbot.addWidget(view)
+
+        comp = make_component("zlib", Classification.CONFIRMED, tmp_path)
+        view.set_components([comp])
+
+        # Provide path without extension
+        out_no_ext = tmp_path / "mybom"
+        view._out_edit.setText(str(out_no_ext))
+
+        for btn in view._fmt_group.buttons():
+            if btn.property("format_value") == "spdx":
+                btn.setChecked(True)
+                break
+
+        view._on_export()
+        # The edit field should now have the .spdx extension
+        assert view._out_edit.text().endswith(".spdx")
+        assert (tmp_path / "mybom.spdx").exists()
+
     @patch("gui.sbom_view.QMessageBox.information")
     def test_export_writes_cyclonedx_json(self, mock_info, qtbot, tmp_path):
         view = SbomView()

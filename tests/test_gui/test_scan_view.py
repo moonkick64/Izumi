@@ -156,7 +156,7 @@ class TestScanView:
 
         assert not view._review_btn.isEnabled()
 
-    def test_review_signal_emits_no_args(self, qtbot, tmp_path):
+    def test_review_signal_emits_path_list(self, qtbot, tmp_path):
         view = ScanView()
         qtbot.addWidget(view)
 
@@ -164,12 +164,13 @@ class TestScanView:
         view.set_data(result, components)
 
         received = []
-        view.review_requested.connect(lambda: received.append(True))
+        view.review_requested.connect(received.append)
 
         with qtbot.waitSignal(view.review_requested, timeout=1000):
             view._on_review_clicked()
 
         assert len(received) == 1
+        assert isinstance(received[0], list)
 
     def test_nested_directories_build_nested_tree(self, qtbot, tmp_path):
         # tmp_path/sub/deep/foo.c  →  root > sub > deep > foo.c

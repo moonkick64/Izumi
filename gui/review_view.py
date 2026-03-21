@@ -113,6 +113,32 @@ class _SummariseWorker(QThread):
             self.error.emit(str(exc))
 
 
+class _BatchWorker(QThread):
+    """Runs direct OSS query on multiple files sequentially."""
+
+    file_started  = Signal(int, int, str)   # current, total, filename
+    file_finished = Signal(str, str)        # file_path_str, hint
+    all_finished  = Signal()
+
+    def __init__(self, files: list, llm_callable) -> None:
+        super().__init__()
+        self._files = files
+        self._llm_callable = llm_callable
+
+    def run(self) -> None:
+        for i, cf in enumerate(self._files):
+            if self.isInterruptionRequested():
+                break
+            self.file_started.emit(i, len(self._files), cf.file_info.path.name)
+            try:
+                source = cf.file_info.path.read_text(errors="replace")
+                hint = self._llm_callable(source)
+            except Exception as exc:
+                hint = f"[ERROR] {exc}"
+            self.file_finished.emit(str(cf.file_info.path), hint)
+        self.all_finished.emit()
+
+
 # ── Main view ──────────────────────────────────────────────────────────────────
 
 class ReviewView(QWidget):
@@ -126,6 +152,7 @@ class ReviewView(QWidget):
         self._all_files: list[ClassifiedFile] = []
         self._components: list[Component] = []
         self._source_root: Optional[Path] = None
+        self._preselected_paths: Optional[set[Path]] = None
         self._current_file: Optional[ClassifiedFile] = None
         self._current_summary_index: int = -1
         self._worker: Optional[QThread] = None
@@ -157,10 +184,12 @@ class ReviewView(QWidget):
         classification: ClassificationResult,
         components: list[Component],
         source_root: Optional[Path] = None,
+        preselected_paths: Optional[list[Path]] = None,
     ) -> None:
-        self._all_files   = classification.all_files
-        self._components  = components
+        self._all_files = classification.all_files
+        self._components = components
         self._source_root = source_root
+        self._preselected_paths = set(preselected_paths) if preselected_paths else None
         self._file_hints.clear()
         self._file_summaries.clear()
         self._current_file = None
@@ -231,6 +260,10 @@ class ReviewView(QWidget):
         self._action_btn = QPushButton("LLM で解析")
         self._action_btn.clicked.connect(self._on_action_clicked)
         left_layout.addWidget(self._action_btn)
+
+        self._batch_btn = QPushButton("選択ファイルを一括解析")
+        self._batch_btn.clicked.connect(self._on_batch_clicked)
+        left_layout.addWidget(self._batch_btn)
 
         splitter.addWidget(left)
 
@@ -331,6 +364,10 @@ class ReviewView(QWidget):
             self._file_list.addItem(item)
         if files:
             self._file_list.setCurrentRow(0)
+        if self._preselected_paths is not None:
+            self._batch_btn.setText(f"選択した {len(self._preselected_paths)} ファイルを一括解析")
+        else:
+            self._batch_btn.setText("フィルター中の全ファイルを一括解析")
 
     def _file_label(self, cf: ClassifiedFile) -> str:
         path = cf.file_info.path
@@ -545,6 +582,65 @@ class ReviewView(QWidget):
         except Exception as exc:
             QMessageBox.critical(self, "外部LLMエラー", str(exc))
 
+    # ── Batch analysis ─────────────────────────────────────────────────────────
+
+    def _on_batch_clicked(self) -> None:
+        option = self._selected_option()
+        if option == OPTION_2_LOCAL_SUMMARY:
+            QMessageBox.information(self, "非対応", "一括解析はオプション1・3のみ対応しています。")
+            return
+
+        if self._preselected_paths is not None:
+            files = [f for f in self._all_files if f.file_info.path in self._preselected_paths]
+        else:
+            files = self._filtered_files()
+
+        if not files:
+            QMessageBox.information(self, "対象なし", "解析するファイルがありません。")
+            return
+
+        if option == OPTION_1_LOCAL_DIRECT:
+            if not self._local_llm.is_available():
+                QMessageBox.warning(self, "Ollama 未接続",
+                    f"Ollama に接続できません ({self._local_llm.api_base})。")
+                return
+            llm_callable = self._local_llm.query_direct
+        else:  # OPTION_3
+            confirm = QMessageBox.question(
+                self, "外部LLMへの送信確認",
+                f"{len(files)} ファイルのソースコードをそのまま外部LLMに送信します。\n"
+                "機密情報が含まれていないか確認してください。\n\n送信しますか？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if confirm != QMessageBox.StandardButton.Yes:
+                return
+            llm_callable = self._external_llm.query_direct
+
+        self._set_busy(True)
+        self._worker = _BatchWorker(files, llm_callable)
+        self._worker.file_started.connect(self._on_batch_file_started)
+        self._worker.file_finished.connect(self._on_batch_file_finished)
+        self._worker.all_finished.connect(self._on_batch_all_finished)
+        self._worker.start()
+
+    @Slot(int, int, str)
+    def _on_batch_file_started(self, current: int, total: int, name: str) -> None:
+        self._progress_bar.setRange(0, total)
+        self._progress_bar.setValue(current)
+
+    @Slot(str, str)
+    def _on_batch_file_finished(self, path_str: str, hint: str) -> None:
+        self._file_hints[Path(path_str)] = hint
+        # If currently displayed file just got analyzed, update the hint
+        if self._current_file and str(self._current_file.file_info.path) == path_str:
+            self._hint_edit.setPlainText(hint)
+
+    @Slot()
+    def _on_batch_all_finished(self) -> None:
+        self._set_busy(False)
+        self._progress_bar.setRange(0, 0)
+        self._progress_bar.setVisible(False)
+
     # ── Shared helpers ─────────────────────────────────────────────────────────
 
     @Slot(str)
@@ -554,6 +650,7 @@ class ReviewView(QWidget):
 
     def _set_busy(self, busy: bool) -> None:
         self._action_btn.setEnabled(not busy)
+        self._batch_btn.setEnabled(not busy)
         self._filter_combo.setEnabled(not busy)
         if busy:
             self._progress_bar.setRange(0, 0)
