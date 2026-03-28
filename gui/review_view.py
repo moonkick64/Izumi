@@ -40,6 +40,7 @@ from analyzer.models import Component
 from analyzer.parser import extract_functions, FunctionInfo
 from llm.local_llm import LocalLLM
 from llm.external_llm import ExternalLLM
+from llm.prompts import parse_oss_response
 from llm.results import LLMResultsStore
 from i18n import t
 
@@ -141,9 +142,11 @@ class ReviewView(QWidget):
         self._current_fn: Optional[FunctionInfo] = None
 
         # Per-function results (key = (file_path, func_name, start_line))
-        self._fn_hints:     dict[tuple, str] = {}
-        self._fn_summaries: dict[tuple, str] = {}   # option-2 intermediate summaries
-        self._fn_matches:   dict[tuple, tuple[str, str]] = {}  # (component, license)
+        self._fn_hints:       dict[tuple, str] = {}
+        self._fn_summaries:   dict[tuple, str] = {}                   # option-2 intermediate summaries
+        self._fn_matches:     dict[tuple, tuple[str, str]] = {}        # user-confirmed (component, license)
+        self._fn_auto_parsed: dict[tuple, tuple[str, str, str]] = {}   # LLM-parsed (component, license, hint)
+        self._fn_errors:      set[tuple] = set()                       # parse-failed functions
 
         self._worker: Optional[QThread] = None
         # "analyse" → store in _fn_hints  /  "summarise" → store in _fn_summaries
@@ -184,6 +187,8 @@ class ReviewView(QWidget):
         self._fn_hints.clear()
         self._fn_summaries.clear()
         self._fn_matches.clear()
+        self._fn_auto_parsed.clear()
+        self._fn_errors.clear()
 
         if source_root:
             self._store = LLMResultsStore(source_root)
@@ -191,6 +196,12 @@ class ReviewView(QWidget):
             matches = self._store.matches_by_key()
             if hints:
                 self._fn_hints.update(hints)
+                for key, raw in hints.items():
+                    parsed = parse_oss_response(raw)
+                    if parsed is not None:
+                        self._fn_auto_parsed[key] = parsed
+                    else:
+                        self._fn_errors.add(key)
             if matches:
                 self._fn_matches.update(matches)
             count = len(hints)
@@ -481,6 +492,21 @@ class ReviewView(QWidget):
         self._progress_bar.setValue(current)
 
     @Slot(list)
+    def _hint_text_for(self, key: tuple) -> str:
+        """Return the text to display in the hint area for *key*.
+
+        - Parse error: error message + raw LLM response
+        - Parse success: extracted hint field
+        - No result: empty string
+        """
+        if key in self._fn_errors:
+            raw = self._fn_hints.get(key, "")
+            return t("parse_error_msg") + ("\n\n" + raw if raw else "")
+        if key in self._fn_auto_parsed:
+            _, _, hint = self._fn_auto_parsed[key]
+            return hint
+        return self._fn_hints.get(key, "")
+
     def _on_extract_finished(self, functions: list) -> None:
         self._set_busy(False)
         self._extracted_functions = functions
@@ -492,6 +518,8 @@ class ReviewView(QWidget):
             key = _fn_key(fn)
             if key in self._fn_matches:
                 marker = "\u2713 "   # ✓ matched
+            elif key in self._fn_errors:
+                marker = "\u2717 "   # ✗ parse error
             elif key in self._fn_hints or key in self._fn_summaries:
                 marker = "~ "        # has result, not yet matched
             else:
@@ -523,10 +551,15 @@ class ReviewView(QWidget):
         self._body_view.setPlainText(fn.body.lstrip('\n'))
 
         key = _fn_key(fn)
-        self._hint_edit.setPlainText(self._fn_hints.get(key, ""))
+        self._hint_edit.setPlainText(self._hint_text_for(key))
         self._summary_edit.setPlainText(self._fn_summaries.get(key, ""))
 
-        comp, lic = self._fn_matches.get(key, ("", ""))
+        if key in self._fn_matches:
+            comp, lic = self._fn_matches[key]
+        elif key in self._fn_auto_parsed:
+            comp, lic, _ = self._fn_auto_parsed[key]
+        else:
+            comp, lic = "", ""
         self._comp_edit.setText(comp)
         self._lic_edit.setText(lic)
 
@@ -666,12 +699,23 @@ class ReviewView(QWidget):
             self._fn_hints[key] = result
             if self._store:
                 self._store.save_result(fn, self._current_option, result)
+            parsed = parse_oss_response(result)
+            if parsed is not None:
+                self._fn_auto_parsed[key] = parsed
+                self._fn_errors.discard(key)
+            else:
+                self._fn_errors.add(key)
+                self._fn_auto_parsed.pop(key, None)
 
         if self._current_fn and key == _fn_key(self._current_fn):
             if self._batch_mode == "summarise":
                 self._summary_edit.setPlainText(result)
             else:
-                self._hint_edit.setPlainText(result)
+                self._hint_edit.setPlainText(self._hint_text_for(key))
+                if key not in self._fn_matches:
+                    comp, lic, _ = self._fn_auto_parsed.get(key, ("", "", ""))
+                    self._comp_edit.setText(comp)
+                    self._lic_edit.setText(lic)
 
     @Slot()
     def _on_batch_all_finished(self) -> None:
@@ -702,6 +746,8 @@ class ReviewView(QWidget):
         self._fn_hints.clear()
         self._fn_summaries.clear()
         self._fn_matches.clear()
+        self._fn_auto_parsed.clear()
+        self._fn_errors.clear()
         self._results_label.setText(t("results_deleted"))
         self._refresh_function_list()
         self._hint_edit.clear()

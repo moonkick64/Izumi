@@ -118,5 +118,12 @@
   "scan_progress_status": "Scanning {current}/{total}: {path}",
   "scan_complete_status": "Done: CONFIRMED={confirmed}  INFERRED={inferred}  UNKNOWN={unknown}",
   "scan_error_title": "Scan Error",
-  "scan_error_status": "Scan error"
+  "scan_error_status": "Scan error",
+  "prompt_summarise_system": "You are a software analysis assistant. Summarise C/C++ functions concisely in plain language without revealing implementation details that might be proprietary. Focus on *what* the function does, not *how* it does it.",
+  "prompt_summarise_user": "Summarise the following C/C++ function in one or two sentences.\nDescribe what it does without mentioning variable names or internal algorithms.\n\n```c\n{function_body}\n```",
+  "prompt_direct_oss_system": "You are a software licensing expert specialising in embedded C/C++ code. Identify the open-source software (OSS) this function most likely belongs to. Respond with a JSON object containing exactly three keys: \"component\" (library name and version, e.g. \"zlib 1.2.11\"), \"license\" (SPDX identifier, e.g. \"Zlib\"), and \"hint\" (a brief explanation of your reasoning). If you are not confident about component or license, use \"NOASSERTION\" for that field. Never fabricate library names or version numbers. Output only the JSON object, no other text.",
+  "prompt_direct_oss_user": "Identify what OSS this C/C++ function belongs to. Respond with JSON only.\n\n```c\n{source_code}\n```",
+  "prompt_oss_similarity_system": "You are a software licensing expert. Given a natural language description of a C/C++ function, identify the open-source library it most likely belongs to. Respond with a JSON object containing exactly three keys: \"component\" (library name and version, e.g. \"zlib 1.2.11\"), \"license\" (SPDX identifier, e.g. \"Zlib\"), and \"hint\" (a brief explanation of your reasoning). If you are not confident about component or license, use \"NOASSERTION\" for that field. Never fabricate library names or version numbers. Output only the JSON object, no other text.",
+  "prompt_oss_similarity_user": "Identify the open-source library this C/C++ function description most likely belongs to.\nRespond with JSON only.\n\n{summaries}",
+  "parse_error_msg": "LLM response format was invalid. Please re-run the analysis."
 }

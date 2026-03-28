@@ -1,87 +1,73 @@
 """Prompt templates for local and external LLM calls.
 
-All default prompt strings are exposed as module-level constants so that
-the settings UI can read and override them at runtime.
+Prompt strings are stored in i18n/en.json and i18n/ja.json under keys prefixed
+with "prompt_", so the LLM's hint field is returned in the user's language.
+
+OSS identification prompts (Options 1, 2-step2, 3) request structured JSON:
+
+    {"component": "zlib 1.2.11", "license": "Zlib", "hint": "...reason..."}
+
+Use parse_oss_response() to extract (component, license, hint) from the raw
+LLM text.  Returns None on parse failure.
 """
 
-# ── Option 2 – Local LLM (Ollama): function summarisation ────────────────────
+from __future__ import annotations
 
-SUMMARISE_FUNCTION_SYSTEM = (
-    "You are a software analysis assistant. "
-    "Summarise C/C++ functions concisely in plain language without revealing "
-    "implementation details that might be proprietary. "
-    "Focus on *what* the function does, not *how* it does it."
-)
+import json
+import re
 
-SUMMARISE_FUNCTION_USER = """\
-Summarise the following C/C++ function in one or two sentences.
-Describe what it does without mentioning variable names or internal algorithms.
-
-```c
-{function_body}
-```
-"""
-
-# ── Option 2 – External LLM: OSS similarity search (from summaries) ──────────
-
-OSS_SIMILARITY_SYSTEM = (
-    "You are a software licensing expert. "
-    "Given a natural language description of a function, identify any known "
-    "open-source libraries or functions with similar behaviour. "
-    "If you are not confident, say so explicitly. "
-    "Never fabricate library names or version numbers."
-)
-
-OSS_SIMILARITY_USER = """\
-The following descriptions are of functions found in an embedded C/C++ codebase.
-For each description, identify any known open-source libraries or functions with \
-similar behaviour.
-If you are unsure, say "No confident match found."
-
-{summaries}
-"""
-
-# ── Option 1 / 3 – Direct OSS identification from source code ─────────────────
-# Default matches CLAUDE.md spec; user can edit via settings.
-
-DIRECT_OSS_SYSTEM = (
-    "You are a software licensing expert specialising in embedded C/C++ code. "
-    "Identify open-source software (OSS) contained in or similar to the given "
-    "source code. If you are not confident, say so explicitly. "
-    "Never fabricate library names or version numbers."
-)
-
-DIRECT_OSS_USER = """\
-この情報から何のOSSが含まれているか特定してください。心当たりがなければその旨を答えてください。
-
-```c
-{source_code}
-```
-"""
+from i18n import t
 
 
 # ── Formatting helpers ────────────────────────────────────────────────────────
 
 def format_summarise_prompt(function_body: str) -> list[dict]:
     return [
-        {"role": "system", "content": SUMMARISE_FUNCTION_SYSTEM},
-        {"role": "user", "content": SUMMARISE_FUNCTION_USER.format(
-            function_body=function_body
-        )},
-    ]
-
-
-def format_oss_similarity_prompt(summaries: list[str]) -> list[dict]:
-    numbered = "\n".join(f"{i+1}. {s}" for i, s in enumerate(summaries))
-    return [
-        {"role": "system", "content": OSS_SIMILARITY_SYSTEM},
-        {"role": "user", "content": OSS_SIMILARITY_USER.format(summaries=numbered)},
+        {"role": "system", "content": t("prompt_summarise_system")},
+        {"role": "user",   "content": t("prompt_summarise_user", function_body=function_body)},
     ]
 
 
 def format_direct_oss_prompt(source_code: str) -> list[dict]:
-    """Format a prompt for Option 1 (local direct) and Option 3 (external direct)."""
+    """Option 1 (local direct) and Option 3 (external direct)."""
     return [
-        {"role": "system", "content": DIRECT_OSS_SYSTEM},
-        {"role": "user", "content": DIRECT_OSS_USER.format(source_code=source_code)},
+        {"role": "system", "content": t("prompt_direct_oss_system")},
+        {"role": "user",   "content": t("prompt_direct_oss_user", source_code=source_code)},
     ]
+
+
+def format_oss_similarity_prompt(summaries: list[str]) -> list[dict]:
+    """Option 2 step-2: external LLM receives function summaries."""
+    numbered = "\n".join(f"{i+1}. {s}" for i, s in enumerate(summaries))
+    return [
+        {"role": "system", "content": t("prompt_oss_similarity_system")},
+        {"role": "user",   "content": t("prompt_oss_similarity_user", summaries=numbered)},
+    ]
+
+
+# ── Response parser ───────────────────────────────────────────────────────────
+
+def parse_oss_response(text: str) -> tuple[str, str, str] | None:
+    """Extract (component, license, hint) from a structured LLM response.
+
+    Handles both raw JSON and JSON wrapped in markdown code fences.
+    Returns None if parsing fails, so callers can treat the function as errored.
+
+    Examples of accepted input:
+        {"component": "zlib 1.2.11", "license": "Zlib", "hint": "CRC32 matches zlib"}
+        ```json
+        {"component": "NOASSERTION", "license": "NOASSERTION", "hint": "No match found"}
+        ```
+    """
+    stripped = text.strip()
+    m = re.search(r"```(?:json)?\s*([\s\S]*?)```", stripped)
+    if m:
+        stripped = m.group(1).strip()
+    try:
+        data = json.loads(stripped)
+        component = str(data.get("component", "")).strip()
+        license_  = str(data.get("license",   "")).strip()
+        hint      = str(data.get("hint",       "")).strip()
+        return component, license_, hint
+    except Exception:
+        return None
