@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from analyzer.classifier import Classification
 from analyzer.models import Component
+from i18n import t
 
 
 _FMT_EXTENSIONS: dict[str, str] = {
@@ -58,11 +59,14 @@ class SbomView(QWidget):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(12)
 
-        root.addWidget(QLabel("SBOM 出力"))
+        root.addWidget(QLabel(t("sbom_title")))
 
         # Component summary table
         self._table = QTableWidget(0, 4)
-        self._table.setHorizontalHeaderLabels(["コンポーネント", "分類", "ライセンス", "ファイル数"])
+        self._table.setHorizontalHeaderLabels([
+            t("col_component"), t("col_classification"),
+            t("col_license"),   t("col_file_count"),
+        ])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
@@ -72,12 +76,12 @@ class SbomView(QWidget):
         root.addWidget(self._table)
 
         # Output options
-        opt_group = QGroupBox("出力設定")
+        opt_group = QGroupBox(t("output_settings_group"))
         opt_layout = QVBoxLayout(opt_group)
 
         # Format radio buttons
         fmt_row = QHBoxLayout()
-        fmt_row.addWidget(QLabel("フォーマット:"))
+        fmt_row.addWidget(QLabel(t("format_label")))
 
         self._fmt_group = QButtonGroup(self)
         for label, value in [
@@ -98,12 +102,12 @@ class SbomView(QWidget):
 
         # Output path
         path_row = QHBoxLayout()
-        path_row.addWidget(QLabel("出力先:"))
+        path_row.addWidget(QLabel(t("output_path_label")))
         self._out_edit = QLineEdit()
-        self._out_edit.setPlaceholderText("出力ファイルのパス")
+        self._out_edit.setPlaceholderText(t("output_path_placeholder"))
         path_row.addWidget(self._out_edit)
 
-        browse_btn = QPushButton("参照…")
+        browse_btn = QPushButton(t("browse_btn"))
         browse_btn.clicked.connect(self._browse_output)
         path_row.addWidget(browse_btn)
 
@@ -112,12 +116,12 @@ class SbomView(QWidget):
 
         # Buttons
         btn_row = QHBoxLayout()
-        back_btn = QPushButton("← スキャン結果に戻る")
+        back_btn = QPushButton(t("back_to_scan_btn"))
         back_btn.clicked.connect(self.back_requested)
         btn_row.addWidget(back_btn)
         btn_row.addStretch()
 
-        export_btn = QPushButton("SBOM を出力")
+        export_btn = QPushButton(t("export_sbom_btn"))
         export_btn.setFixedHeight(36)
         export_btn.clicked.connect(self._on_export)
         btn_row.addWidget(export_btn)
@@ -144,7 +148,7 @@ class SbomView(QWidget):
         for row, comp in enumerate(self._components):
             self._table.setItem(row, 0, QTableWidgetItem(comp.name))
             self._table.setItem(row, 1, QTableWidgetItem(comp.classification.value))
-            self._table.setItem(row, 2, QTableWidgetItem(comp.license_expression or "不明"))
+            self._table.setItem(row, 2, QTableWidgetItem(comp.license_expression or t("unknown_license")))
             self._table.setItem(row, 3, QTableWidgetItem(str(len(comp.files))))
 
     # ── Slots ─────────────────────────────────────────────────────────────
@@ -159,7 +163,7 @@ class SbomView(QWidget):
         }
         default_name = "sbom" + _FMT_EXTENSIONS.get(fmt, "")
         path, _ = QFileDialog.getSaveFileName(
-            self, "SBOM 出力先", default_name, filters.get(fmt, "All files (*)")
+            self, t("sbom_output_dialog"), default_name, filters.get(fmt, "All files (*)")
         )
         if path:
             out_path = self._ensure_extension(Path(path), fmt)
@@ -168,7 +172,7 @@ class SbomView(QWidget):
     def _on_export(self) -> None:
         out_path = Path(self._out_edit.text().strip())
         if not out_path.name:
-            QMessageBox.warning(self, "出力先未設定", "出力先ファイルを指定してください。")
+            QMessageBox.warning(self, t("no_output_path_title"), t("no_output_path_msg"))
             return
 
         fmt = self._selected_format()
@@ -185,10 +189,10 @@ class SbomView(QWidget):
                 write_cyclonedx(self._components, out_path, output_format=output_format)
 
             QMessageBox.information(
-                self, "出力完了", f"SBOM を出力しました:\n{out_path}"
+                self, t("export_complete_title"), t("export_complete_msg", out_path=out_path)
             )
         except Exception as exc:
-            QMessageBox.critical(self, "出力エラー", str(exc))
+            QMessageBox.critical(self, t("export_error_title"), str(exc))
 
     def _selected_format(self) -> str:
         checked = self._fmt_group.checkedButton()

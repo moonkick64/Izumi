@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QFormLayout,
     QGroupBox,
@@ -17,6 +18,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from i18n import t, get_language, set_language
 
 
 class SettingsView(QWidget):
@@ -36,7 +39,7 @@ class SettingsView(QWidget):
         root.setContentsMargins(40, 40, 40, 40)
         root.setSpacing(20)
 
-        title = QLabel("Izumi – OSS 検出 & SBOM 支援")
+        title = QLabel(t("app_title"))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         font = title.font()
         font.setPointSize(18)
@@ -45,42 +48,42 @@ class SettingsView(QWidget):
         root.addWidget(title)
 
         # ── Source directory ─────────────────────────────────────────────
-        src_group = QGroupBox("スキャン対象")
+        src_group = QGroupBox(t("scan_target_group"))
         src_layout = QHBoxLayout(src_group)
 
         self._src_edit = QLineEdit()
-        self._src_edit.setPlaceholderText("スキャンするソースツリーのパス")
+        self._src_edit.setPlaceholderText(t("source_path_placeholder"))
         src_layout.addWidget(self._src_edit)
 
-        browse_btn = QPushButton("参照…")
+        browse_btn = QPushButton(t("browse_btn"))
         browse_btn.clicked.connect(self._browse_source)
         src_layout.addWidget(browse_btn)
 
         root.addWidget(src_group)
 
         # ── Local LLM ────────────────────────────────────────────────────
-        local_group = QGroupBox("ローカルLLM (Ollama)")
+        local_group = QGroupBox(t("local_llm_group"))
         local_form = QFormLayout(local_group)
 
         self._ollama_url_edit = QLineEdit("http://localhost:11434")
-        local_form.addRow("エンドポイント:", self._ollama_url_edit)
+        local_form.addRow(t("endpoint_label"), self._ollama_url_edit)
 
         self._local_model_edit = QLineEdit("ollama/codellama")
-        local_form.addRow("モデル:", self._local_model_edit)
+        local_form.addRow(t("model_label"), self._local_model_edit)
 
         root.addWidget(local_group)
 
         # ── External LLM ─────────────────────────────────────────────────
-        ext_group = QGroupBox("外部LLM")
+        ext_group = QGroupBox(t("external_llm_group"))
         ext_form = QFormLayout(ext_group)
 
         self._ext_model_edit = QLineEdit("claude-sonnet-4-20250514")
-        ext_form.addRow("モデル:", self._ext_model_edit)
+        ext_form.addRow(t("model_label"), self._ext_model_edit)
 
         self._api_key_edit = QLineEdit()
-        self._api_key_edit.setPlaceholderText("APIキー（オプション・環境変数でも可）")
+        self._api_key_edit.setPlaceholderText(t("api_key_placeholder"))
         self._api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        ext_form.addRow("APIキー:", self._api_key_edit)
+        ext_form.addRow(t("api_key_label"), self._api_key_edit)
 
         root.addWidget(ext_group)
 
@@ -93,10 +96,26 @@ class SettingsView(QWidget):
         ):
             field.textChanged.connect(lambda _: self.settings_changed.emit())
 
+        # ── Language selector ─────────────────────────────────────────────
+        lang_row = QHBoxLayout()
+        lang_row.addStretch()
+        lang_row.addWidget(QLabel(t("language_label")))
+        self._lang_combo = QComboBox()
+        self._lang_combo.addItem("English", "en")
+        self._lang_combo.addItem("\u65e5\u672c\u8a9e", "ja")
+        # Set current selection from saved config
+        current_lang = get_language()
+        idx = self._lang_combo.findData(current_lang)
+        if idx >= 0:
+            self._lang_combo.setCurrentIndex(idx)
+        self._lang_combo.currentIndexChanged.connect(self._on_language_changed)
+        lang_row.addWidget(self._lang_combo)
+        root.addLayout(lang_row)
+
         root.addStretch()
 
         # ── Scan button ───────────────────────────────────────────────────
-        scan_btn = QPushButton("スキャン開始")
+        scan_btn = QPushButton(t("scan_start_btn"))
         scan_btn.setFixedHeight(40)
         scan_btn.clicked.connect(self._on_scan_clicked)
         root.addWidget(scan_btn)
@@ -105,7 +124,7 @@ class SettingsView(QWidget):
 
     def _browse_source(self) -> None:
         directory = QFileDialog.getExistingDirectory(
-            self, "スキャン対象ディレクトリを選択"
+            self, t("browse_source_dialog")
         )
         if directory:
             self._src_edit.setText(directory)
@@ -115,11 +134,23 @@ class SettingsView(QWidget):
         if not path.is_dir():
             QMessageBox.warning(
                 self,
-                "パスが無効",
-                f"'{path}' はディレクトリではありません。",
+                t("invalid_path_title"),
+                t("invalid_path_msg", path=path),
             )
             return
         self.scan_requested.emit(path)
+
+    def _on_language_changed(self, index: int) -> None:
+        lang = self._lang_combo.itemData(index)
+        try:
+            set_language(lang)
+        except Exception:
+            pass
+        QMessageBox.information(
+            self,
+            t("restart_required_title"),
+            t("restart_required_msg"),
+        )
 
     # ── Accessors ─────────────────────────────────────────────────────────
 

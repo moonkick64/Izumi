@@ -40,14 +40,10 @@ from analyzer.parser import extract_functions, FunctionInfo
 from llm.local_llm import LocalLLM
 from llm.external_llm import ExternalLLM
 from llm.results import LLMResultsStore
+from i18n import t
 
 
 # ── Classification filter ──────────────────────────────────────────────────────
-
-_FILTER_UNKNOWN   = "UNKNOWN のみ"
-_FILTER_ALL       = "全て"
-_FILTER_INFERRED  = "INFERRED のみ"
-_FILTER_CONFIRMED = "CONFIRMED のみ"
 
 _CLASS_BG: dict[Classification, str] = {
     Classification.CONFIRMED: "#d4edda",
@@ -211,7 +207,7 @@ class ReviewView(QWidget):
             loaded = self._store.hints_by_key()
             if loaded:
                 self._fn_hints.update(loaded)
-                self._results_label.setText(f"既存の解析結果を読み込みました（{len(loaded)} 件）")
+                self._results_label.setText(t("loaded_results", count=len(loaded)))
             else:
                 self._results_label.setText("")
         else:
@@ -230,21 +226,15 @@ class ReviewView(QWidget):
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(6)
 
-        root.addWidget(QLabel("LLM SCA レビュー（関数単位）"))
+        root.addWidget(QLabel(t("review_title")))
 
         # ── LLM option selector ────────────────────────────────────────────────
-        option_group = QGroupBox("LLM 解析オプション")
+        option_group = QGroupBox(t("llm_option_group"))
         option_layout = QVBoxLayout(option_group)
 
-        self._opt1_radio = QRadioButton(
-            "オプション1: 関数のソースコードをローカルLLMに直接送信して特定"
-        )
-        self._opt2_radio = QRadioButton(
-            "オプション2: ローカルLLMで要約 → ユーザー確認・編集 → 外部LLMに送信（機密情報保護）"
-        )
-        self._opt3_radio = QRadioButton(
-            "オプション3: 関数のソースコードを外部LLMに直接送信して特定"
-        )
+        self._opt1_radio = QRadioButton(t("option1_radio"))
+        self._opt2_radio = QRadioButton(t("option2_radio"))
+        self._opt3_radio = QRadioButton(t("option3_radio"))
         self._opt2_radio.setChecked(True)
 
         self._option_btn_group = QButtonGroup(self)
@@ -272,16 +262,19 @@ class ReviewView(QWidget):
         file_layout.setSpacing(4)
 
         filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel("表示:"))
+        filter_row.addWidget(QLabel(t("display_label")))
         self._filter_combo = QComboBox()
         self._filter_combo.addItems([
-            _FILTER_UNKNOWN, _FILTER_ALL, _FILTER_INFERRED, _FILTER_CONFIRMED,
+            t("filter_unknown_only"),
+            t("filter_all"),
+            t("filter_inferred_only"),
+            t("filter_confirmed_only"),
         ])
         self._filter_combo.currentTextChanged.connect(self._on_filter_changed)
         filter_row.addWidget(self._filter_combo)
         file_layout.addLayout(filter_row)
 
-        file_layout.addWidget(QLabel("ファイル一覧"))
+        file_layout.addWidget(QLabel(t("file_list_label")))
         self._file_list = QListWidget()
         self._file_list.setSelectionMode(
             QAbstractItemView.SelectionMode.ExtendedSelection
@@ -289,7 +282,7 @@ class ReviewView(QWidget):
         self._file_list.itemSelectionChanged.connect(self._on_file_selection_changed)
         file_layout.addWidget(self._file_list)
 
-        extract_btn = QPushButton("選択ファイルの関数を抽出")
+        extract_btn = QPushButton(t("extract_btn"))
         extract_btn.clicked.connect(self._on_extract_clicked)
         file_layout.addWidget(extract_btn)
 
@@ -301,7 +294,7 @@ class ReviewView(QWidget):
         fn_layout.setContentsMargins(0, 0, 0, 0)
         fn_layout.setSpacing(4)
 
-        fn_layout.addWidget(QLabel("関数一覧"))
+        fn_layout.addWidget(QLabel(t("function_list_label")))
         self._function_list = QListWidget()
         self._function_list.currentRowChanged.connect(self._on_function_selected)
         fn_layout.addWidget(self._function_list)
@@ -311,10 +304,10 @@ class ReviewView(QWidget):
         fn_layout.addWidget(self._results_label)
 
         btn_row = QHBoxLayout()
-        self._analyse_btn = QPushButton("解析")
+        self._analyse_btn = QPushButton(t("analyse_btn"))
         self._analyse_btn.clicked.connect(self._on_batch_clicked)
         btn_row.addWidget(self._analyse_btn)
-        delete_btn = QPushButton("結果を削除")
+        delete_btn = QPushButton(t("delete_results_btn"))
         delete_btn.clicked.connect(self._on_delete_results_clicked)
         btn_row.addWidget(delete_btn)
         fn_layout.addLayout(btn_row)
@@ -329,44 +322,41 @@ class ReviewView(QWidget):
         right_layout.setContentsMargins(4, 0, 0, 0)
         right_layout.setSpacing(6)
 
-        body_group = QGroupBox("関数ソースコード")
+        body_group = QGroupBox(t("function_body_group"))
         body_layout = QVBoxLayout(body_group)
         self._body_view = QPlainTextEdit()
         self._body_view.setReadOnly(True)
         self._body_view.setFont(QFont("monospace", 9))
-        self._body_view.setPlaceholderText("関数を選択するとここにソースコードが表示されます。")
+        self._body_view.setPlaceholderText(t("function_body_placeholder"))
         body_layout.addWidget(self._body_view)
         right_layout.addWidget(body_group, 2)
 
         # Option 2 panel (summary edit + approve)
-        self._opt2_panel = QGroupBox("要約（編集可能・外部LLMへの送信前に確認してください）")
+        self._opt2_panel = QGroupBox(t("opt2_panel_title"))
         opt2_layout = QVBoxLayout(self._opt2_panel)
 
         self._summary_edit = QPlainTextEdit()
-        self._summary_edit.setPlaceholderText(
-            "「LLMで解析」を押すとローカルLLMが要約を生成します。"
-            "機密情報が含まれる場合はここで編集してから送信してください。"
-        )
+        self._summary_edit.setPlaceholderText(t("opt2_summary_placeholder"))
         opt2_layout.addWidget(self._summary_edit)
 
         approve_row = QHBoxLayout()
-        self._approve_check = QCheckBox("外部LLMへの送信を承認")
+        self._approve_check = QCheckBox(t("approve_checkbox"))
         approve_row.addWidget(self._approve_check)
-        save_btn = QPushButton("保存")
+        save_btn = QPushButton(t("save_btn"))
         save_btn.clicked.connect(self._on_save_summary)
         approve_row.addWidget(save_btn)
-        send_ext_btn = QPushButton("承認済み要約を外部LLMに送信")
+        send_ext_btn = QPushButton(t("send_external_btn"))
         send_ext_btn.clicked.connect(self._on_send_external)
         approve_row.addWidget(send_ext_btn)
         opt2_layout.addLayout(approve_row)
         right_layout.addWidget(self._opt2_panel, 1)
 
         # Hint display (shared)
-        hint_group = QGroupBox("LLMからのヒント（参考情報・確定情報ではありません）")
+        hint_group = QGroupBox(t("hint_group_title"))
         hint_layout = QVBoxLayout(hint_group)
         self._hint_edit = QTextEdit()
         self._hint_edit.setReadOnly(True)
-        self._hint_edit.setPlaceholderText("LLMで解析すると、ここにヒントが表示されます。")
+        self._hint_edit.setPlaceholderText(t("hint_placeholder"))
         hint_layout.addWidget(self._hint_edit)
         right_layout.addWidget(hint_group, 1)
 
@@ -380,11 +370,11 @@ class ReviewView(QWidget):
 
         # Bottom buttons
         bottom_row = QHBoxLayout()
-        back_btn = QPushButton("← スキャン結果に戻る")
+        back_btn = QPushButton(t("back_to_scan_btn"))
         back_btn.clicked.connect(self.back_requested)
         bottom_row.addWidget(back_btn)
         bottom_row.addStretch()
-        export_btn = QPushButton("SBOM 出力 →")
+        export_btn = QPushButton(t("sbom_export_btn"))
         export_btn.clicked.connect(lambda: self.export_requested.emit(self._components))
         bottom_row.addWidget(export_btn)
         root.addLayout(bottom_row)
@@ -401,11 +391,11 @@ class ReviewView(QWidget):
     def _update_ui_for_option(self, option_id: int) -> None:
         self._opt2_panel.setVisible(option_id == OPTION_2_LOCAL_SUMMARY)
         labels = {
-            OPTION_1_LOCAL_DIRECT:    "ローカルLLMで直接解析",
-            OPTION_2_LOCAL_SUMMARY:   "ローカルLLMで要約生成",
-            OPTION_3_EXTERNAL_DIRECT: "外部LLMで直接解析",
+            OPTION_1_LOCAL_DIRECT:    t("option1_label"),
+            OPTION_2_LOCAL_SUMMARY:   t("option2_label"),
+            OPTION_3_EXTERNAL_DIRECT: t("option3_label"),
         }
-        self._analyse_btn.setText(labels.get(option_id, "LLM で解析"))
+        self._analyse_btn.setText(labels.get(option_id, t("analyse_btn_default")))
 
     def _selected_option(self) -> int:
         return self._option_btn_group.checkedId()
@@ -417,11 +407,11 @@ class ReviewView(QWidget):
         if self._preselected_paths is not None:
             files = [f for f in files if f.file_info.path in self._preselected_paths]
         sel = self._filter_combo.currentText()
-        if sel == _FILTER_UNKNOWN:
+        if sel == t("filter_unknown_only"):
             return [f for f in files if f.classification == Classification.UNKNOWN]
-        if sel == _FILTER_INFERRED:
+        if sel == t("filter_inferred_only"):
             return [f for f in files if f.classification == Classification.INFERRED]
-        if sel == _FILTER_CONFIRMED:
+        if sel == t("filter_confirmed_only"):
             return [f for f in files if f.classification == Classification.CONFIRMED]
         return list(files)
 
@@ -473,7 +463,7 @@ class ReviewView(QWidget):
         if not files:
             files = self._filtered_files()
         if not files:
-            QMessageBox.information(self, "対象なし", "解析するファイルがありません。")
+            QMessageBox.information(self, t("no_target_title"), t("no_target_msg"))
             return
 
         self._set_busy(True)
@@ -540,13 +530,12 @@ class ReviewView(QWidget):
 
     def _run_summarise(self) -> None:
         if not self._current_fn:
-            QMessageBox.information(self, "未選択", "要約する関数を選択してください。")
+            QMessageBox.information(self, t("no_selection_title"), t("no_selection_msg"))
             return
         if not self._local_llm.is_available():
             QMessageBox.warning(
-                self, "Ollama 未接続",
-                f"Ollama に接続できません ({self._local_llm.api_base})。\n"
-                "Ollama が起動しているか確認してください。",
+                self, t("ollama_not_connected_title"),
+                t("ollama_not_connected_msg", api_base=self._local_llm.api_base),
             )
             return
 
@@ -600,15 +589,14 @@ class ReviewView(QWidget):
         ]
         if not approved:
             QMessageBox.information(
-                self, "承認済み要約なし",
-                "送信する要約を選択し「承認」チェックをオンにして保存してください。",
+                self, t("no_approved_title"), t("no_approved_msg"),
             )
             return
         try:
             hint = self._external_llm.find_similar_oss(approved)
-            self._hint_edit.setPlainText(hint or "ヒントなし")
+            self._hint_edit.setPlainText(hint or t("no_hint"))
         except Exception as exc:
-            QMessageBox.critical(self, "外部LLMエラー", str(exc))
+            QMessageBox.critical(self, t("external_llm_error_title"), str(exc))
 
     # ── Batch analysis (Options 1 / 3) ────────────────────────────────────────
 
@@ -616,26 +604,24 @@ class ReviewView(QWidget):
         option = self._selected_option()
         if option == OPTION_2_LOCAL_SUMMARY:
             QMessageBox.information(
-                self, "非対応",
-                "オプション2は関数ごとに要約・確認・承認が必要なため一括解析に対応していません。",
+                self, t("opt2_batch_unsupported_title"), t("opt2_batch_unsupported_msg"),
             )
             return
 
         if not self._extracted_functions:
-            QMessageBox.information(self, "関数なし", "先に「選択ファイルの関数を抽出」を実行してください。")
+            QMessageBox.information(self, t("no_functions_title"), t("no_functions_msg"))
             return
 
         if option == OPTION_1_LOCAL_DIRECT:
             if not self._local_llm.is_available():
-                QMessageBox.warning(self, "Ollama 未接続",
-                    f"Ollama に接続できません ({self._local_llm.api_base})。")
+                QMessageBox.warning(self, t("ollama_not_connected_title"),
+                    t("ollama_not_connected_msg_short", api_base=self._local_llm.api_base))
                 return
             llm_callable = self._local_llm.query_direct
         else:
             confirm = QMessageBox.question(
-                self, "外部LLMへの送信確認",
-                f"{len(self._extracted_functions)} 個の関数のソースコードをそのまま外部LLMに送信します。\n"
-                "機密情報が含まれていないか確認してください。\n\n送信しますか？",
+                self, t("confirm_send_external_title"),
+                t("confirm_send_external_msg", count=len(self._extracted_functions)),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if confirm != QMessageBox.StandardButton.Yes:
@@ -654,7 +640,7 @@ class ReviewView(QWidget):
     def _on_batch_fn_started(self, current: int, total: int, name: str) -> None:
         self._progress_bar.setRange(0, total)
         self._progress_bar.setValue(current)
-        self._results_label.setText(f"解析中 {current + 1}/{total}: {name}")
+        self._results_label.setText(t("analysing_progress", current=current + 1, total=total, name=name))
 
     @Slot(object, str)
     def _on_batch_fn_finished(self, fn: FunctionInfo, hint: str) -> None:
@@ -669,25 +655,24 @@ class ReviewView(QWidget):
     def _on_batch_all_finished(self) -> None:
         self._set_busy(False)
         count = len(self._fn_hints)
-        self._results_label.setText(f"解析完了・自動保存済み（{count} 件）")
+        self._results_label.setText(t("analysis_complete", count=count))
         self._refresh_function_list()
 
     # ── Delete results ─────────────────────────────────────────────────────────
 
     def _on_delete_results_clicked(self) -> None:
         if not self._store or not self._store.exists():
-            QMessageBox.information(self, "結果なし", "保存済みの解析結果はありません。")
+            QMessageBox.information(self, t("no_results_title"), t("no_results_msg"))
             return
         confirm = QMessageBox.question(
-            self, "結果を削除",
-            "保存済みの解析結果を削除します。この操作は元に戻せません。\n\n削除しますか？",
+            self, t("delete_results_title"), t("delete_results_confirm_msg"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if confirm != QMessageBox.StandardButton.Yes:
             return
         self._store.delete()
         self._fn_hints.clear()
-        self._results_label.setText("解析結果を削除しました")
+        self._results_label.setText(t("results_deleted"))
         self._refresh_function_list()
         self._hint_edit.clear()
 
@@ -696,7 +681,7 @@ class ReviewView(QWidget):
     @Slot(str)
     def _on_worker_error(self, message: str) -> None:
         self._set_busy(False)
-        QMessageBox.critical(self, "LLMエラー", message)
+        QMessageBox.critical(self, t("llm_error_title"), message)
 
     def _set_busy(self, busy: bool) -> None:
         self._analyse_btn.setEnabled(not busy)

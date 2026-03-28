@@ -11,6 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from analyzer.classifier import Classification
 from analyzer.models import Component
 from gui.sbom_view import SbomView
+from i18n import t
 
 
 def make_component(name: str, cls: Classification, tmp_path: Path) -> Component:
@@ -68,7 +69,7 @@ class TestSbomView:
         comp = make_component("mystery", Classification.UNKNOWN, tmp_path)
         view.set_components([comp])
 
-        assert view._table.item(0, 2).text() == "不明"
+        assert view._table.item(0, 2).text() == t("unknown_license")
 
     def test_back_signal(self, qtbot, tmp_path):
         view = SbomView()

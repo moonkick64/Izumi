@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from analyzer.classifier import Classification, ClassificationResult, ClassifiedFile
 from analyzer.models import Component
+from i18n import t
 
 
 _CLASS_BG: dict[Classification, str] = {
@@ -101,7 +102,7 @@ class ScanView(QWidget):
         left_layout.setContentsMargins(0, 0, 4, 0)
         left_layout.setSpacing(4)
 
-        tree_header = QLabel("ファイルツリー")
+        tree_header = QLabel(t("file_tree_label"))
         tree_header.setFont(QFont("monospace", 9))
         left_layout.addWidget(tree_header)
 
@@ -129,9 +130,7 @@ class ScanView(QWidget):
         self._source_view = QPlainTextEdit()
         self._source_view.setReadOnly(True)
         self._source_view.setFont(QFont("monospace", 10))
-        self._source_view.setPlaceholderText(
-            "ファイルを選択するとソースコードが表示されます。"
-        )
+        self._source_view.setPlaceholderText(t("source_placeholder"))
         right_layout.addWidget(self._source_view)
 
         splitter.addWidget(right)
@@ -141,11 +140,11 @@ class ScanView(QWidget):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
-        self._review_btn = QPushButton("LLM 解析 →")
+        self._review_btn = QPushButton(t("llm_analysis_btn"))
         self._review_btn.clicked.connect(self._on_review_clicked)
         btn_row.addWidget(self._review_btn)
 
-        self._export_btn = QPushButton("SBOM 出力 →")
+        self._export_btn = QPushButton(t("sbom_export_btn"))
         self._export_btn.clicked.connect(self._on_export_clicked)
         btn_row.addWidget(self._export_btn)
 
@@ -246,7 +245,7 @@ class ScanView(QWidget):
         try:
             text = cf.file_info.path.read_text(errors="replace")
         except OSError as exc:
-            text = f"[読み込みエラー: {exc}]"
+            text = t("read_error", exc=exc)
         self._source_view.setPlainText(text)
 
     def _on_review_clicked(self) -> None:

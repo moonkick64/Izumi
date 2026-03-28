@@ -28,6 +28,7 @@ from gui.scan_view import ScanView
 from gui.review_view import ReviewView
 from gui.sbom_view import SbomView
 from gui.settings_view import SettingsView
+from i18n import t
 
 
 # ── Background worker ─────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Izumi – OSS Detection & SBOM")
+        self.setWindowTitle(t("window_title"))
         self.resize(1100, 700)
 
         # Application state
@@ -122,21 +123,21 @@ class MainWindow(QMainWindow):
     def _build_menu(self) -> None:
         menu = self.menuBar()
 
-        file_menu = menu.addMenu("ファイル(&F)")
-        new_scan = QAction("新規スキャン(&N)", self)
+        file_menu = menu.addMenu(t("file_menu"))
+        new_scan = QAction(t("new_scan_action"), self)
         new_scan.triggered.connect(lambda: self._show_page(_PAGE_SETTINGS))
         file_menu.addAction(new_scan)
         file_menu.addSeparator()
-        quit_action = QAction("終了(&Q)", self)
+        quit_action = QAction(t("quit_action"), self)
         quit_action.triggered.connect(QApplication.quit)
         file_menu.addAction(quit_action)
 
-        view_menu = menu.addMenu("表示(&V)")
+        view_menu = menu.addMenu(t("view_menu"))
         actions = [
-            ("設定", _PAGE_SETTINGS),
-            ("スキャン結果", _PAGE_SCAN),
-            ("LLM SCAレビュー", _PAGE_REVIEW),
-            ("SBOM出力", _PAGE_SBOM),
+            (t("menu_settings"), _PAGE_SETTINGS),
+            (t("menu_scan"),     _PAGE_SCAN),
+            (t("menu_review"),   _PAGE_REVIEW),
+            (t("menu_sbom"),     _PAGE_SBOM),
         ]
         for label, page in actions:
             act = QAction(label, self)
@@ -161,7 +162,7 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _on_scan_requested(self, source_dir: Path) -> None:
         self._source_dir = source_dir
-        self._status_bar.showMessage(f"スキャン中: {source_dir}")
+        self._status_bar.showMessage(t("scanning_status", source_dir=source_dir))
         self._progress_bar.setRange(0, 0)  # Indeterminate
         self._progress_bar.setVisible(True)
 
@@ -175,7 +176,7 @@ class MainWindow(QMainWindow):
     def _on_scan_progress(self, current: int, total: int, path: str) -> None:
         self._progress_bar.setRange(0, total)
         self._progress_bar.setValue(current)
-        self._status_bar.showMessage(f"スキャン中 {current}/{total}: {path}")
+        self._status_bar.showMessage(t("scan_progress_status", current=current, total=total, path=path))
 
     @Slot(object, object, object)
     def _on_scan_finished(
@@ -191,9 +192,10 @@ class MainWindow(QMainWindow):
         self._progress_bar.setVisible(False)
         summary = classification.summary()
         self._status_bar.showMessage(
-            f"完了: CONFIRMED={summary['confirmed']}  "
-            f"INFERRED={summary['inferred']}  "
-            f"UNKNOWN={summary['unknown']}"
+            t("scan_complete_status",
+              confirmed=summary['confirmed'],
+              inferred=summary['inferred'],
+              unknown=summary['unknown'])
         )
 
         self._scan_view.set_data(classification, components, self._source_dir)
@@ -202,8 +204,8 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_scan_error(self, message: str) -> None:
         self._progress_bar.setVisible(False)
-        self._status_bar.showMessage("スキャンエラー")
-        QMessageBox.critical(self, "スキャンエラー", message)
+        self._status_bar.showMessage(t("scan_error_status"))
+        QMessageBox.critical(self, t("scan_error_title"), message)
 
     # ── Review flow ───────────────────────────────────────────────────────
 
