@@ -112,6 +112,7 @@ class MainWindow(QMainWindow):
 
         # Connect signals from screens
         self._settings_view.scan_requested.connect(self._on_scan_requested)
+        self._settings_view.settings_changed.connect(self._on_settings_changed)
         self._scan_view.review_requested.connect(self._on_review_requested)
         self._scan_view.export_requested.connect(self._on_export_requested)
         self._review_view.back_requested.connect(lambda: self._show_page(_PAGE_SCAN))
@@ -149,15 +150,17 @@ class MainWindow(QMainWindow):
 
     # ── Scan flow ─────────────────────────────────────────────────────────
 
-    @Slot(object)
-    def _on_scan_requested(self, source_dir: Path) -> None:
-        self._source_dir = source_dir
+    def _on_settings_changed(self) -> None:
         self._review_view.configure_llm(
             ollama_url=self._settings_view.ollama_url,
             local_model=self._settings_view.local_model,
             external_model=self._settings_view.external_model,
             api_key=self._settings_view.api_key,
         )
+
+    @Slot(object)
+    def _on_scan_requested(self, source_dir: Path) -> None:
+        self._source_dir = source_dir
         self._status_bar.showMessage(f"スキャン中: {source_dir}")
         self._progress_bar.setRange(0, 0)  # Indeterminate
         self._progress_bar.setVisible(True)

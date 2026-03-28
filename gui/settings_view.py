@@ -22,7 +22,8 @@ from PySide6.QtWidgets import (
 class SettingsView(QWidget):
     """Screen 1: project configuration and scan launch."""
 
-    scan_requested = Signal(object)  # Path
+    scan_requested  = Signal(object)  # Path
+    settings_changed = Signal()       # emitted whenever any LLM setting changes
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -82,6 +83,15 @@ class SettingsView(QWidget):
         ext_form.addRow("APIキー:", self._api_key_edit)
 
         root.addWidget(ext_group)
+
+        # Emit settings_changed whenever any LLM field is edited
+        for field in (
+            self._ollama_url_edit,
+            self._local_model_edit,
+            self._ext_model_edit,
+            self._api_key_edit,
+        ):
+            field.textChanged.connect(lambda _: self.settings_changed.emit())
 
         root.addStretch()
 
