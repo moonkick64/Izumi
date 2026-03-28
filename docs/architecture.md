@@ -245,8 +245,8 @@ UI文字列は `i18n/` モジュールで一元管理する。
 ```
 i18n/
   __init__.py   # t(key, **kwargs) 関数・set_language() / get_language()
-  en.py         # 英語文字列辞書（デフォルト）
-  ja.py         # 日本語文字列辞書（unicode エスケープで記述）
+  en.json       # 英語文字列辞書（デフォルト）
+  ja.json       # 日本語文字列辞書
 ```
 
 **使い方:**

@@ -51,8 +51,8 @@ izumi/
   │   └─ settings_view.py  # 設定画面
   ├─ i18n/
   │   ├─ __init__.py          # t() 関数・言語切り替え
-  │   ├─ en.py                # 英語文字列（デフォルト）
-  │   └─ ja.py                # 日本語文字列
+  │   ├─ en.json              # 英語文字列（デフォルト）
+  │   └─ ja.json              # 日本語文字列
   ├─ sbom/
   │   ├─ __init__.py
   │   ├─ spdx_writer.py    # SPDX出力

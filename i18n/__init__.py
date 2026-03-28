@@ -9,6 +9,8 @@ Usage:
 Language is stored in ~/.izumi/config.json under the key "language".
 Supported values: "en" (default), "ja".
 Restart is required after changing the language.
+
+Translation files: i18n/en.json, i18n/ja.json
 """
 
 from __future__ import annotations
@@ -16,11 +18,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from i18n import en as _en
-
+_I18N_DIR    = Path(__file__).parent
 _CONFIG_PATH = Path.home() / ".izumi" / "config.json"
-_SUPPORTED    = {"en", "ja"}
-_DEFAULT      = "en"
+_SUPPORTED   = {"en", "ja"}
+_DEFAULT     = "en"
 
 # Active string table (filled in _load_strings)
 _strings: dict[str, str] = {}
@@ -29,11 +30,16 @@ _strings: dict[str, str] = {}
 def _load_strings() -> None:
     global _strings
     lang = get_language()
-    if lang == "ja":
-        from i18n import ja as _ja
-        _strings = _ja.STRINGS
-    else:
-        _strings = _en.STRINGS
+    json_path = _I18N_DIR / f"{lang}.json"
+    try:
+        _strings = json.loads(json_path.read_text(encoding="utf-8"))
+    except Exception:
+        # Fallback to English if the file is missing or corrupt
+        fallback = _I18N_DIR / "en.json"
+        try:
+            _strings = json.loads(fallback.read_text(encoding="utf-8"))
+        except Exception:
+            _strings = {}
 
 
 def get_language() -> str:
