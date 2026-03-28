@@ -1,11 +1,12 @@
 """Persistence layer for LLM analysis results.
 
-Results are stored in <source_root>/.izumi/llm_results.json.
+Results are stored in ~/.izumi/results/<project_name>_<hash>/llm_results.json.
 Each function is saved individually so results survive interrupted analysis runs.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,16 +15,39 @@ from typing import Any
 from analyzer.parser import FunctionInfo
 
 
-_RESULTS_DIR  = ".izumi"
 _RESULTS_FILE = "llm_results.json"
 
 
-class LLMResultsStore:
-    """Read/write LLM analysis results for a given source tree."""
+def _project_dir(source_root: Path, app_dir: Path) -> Path:
+    """Return the per-project results directory inside *app_dir*.
 
-    def __init__(self, source_root: Path) -> None:
-        self._source_root  = source_root
-        self._results_path = source_root / _RESULTS_DIR / _RESULTS_FILE
+    The directory name is ``<project_folder_name>_<8-char hash>`` so it is
+    both human-readable and collision-resistant even when two projects share
+    the same folder name.
+    """
+    resolved = source_root.resolve()
+    h = hashlib.sha256(str(resolved).encode()).hexdigest()[:8]
+    name = resolved.name or "root"
+    return app_dir / "results" / f"{name}_{h}"
+
+
+class LLMResultsStore:
+    """Read/write LLM analysis results for a given source tree.
+
+    Files are stored under *app_dir* (default: ``~/.izumi``) so the scanned
+    source tree is never modified.
+    """
+
+    def __init__(
+        self,
+        source_root: Path,
+        app_dir: Path | None = None,
+    ) -> None:
+        self._source_root = source_root
+        self._app_dir     = app_dir or (Path.home() / ".izumi")
+        self._results_path = (
+            _project_dir(source_root, self._app_dir) / _RESULTS_FILE
+        )
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -103,7 +127,7 @@ class LLMResultsStore:
             except Exception:
                 pass
         return {
-            "source_root": str(self._source_root),
+            "source_root": str(self._source_root.resolve()),
             "created_at":  datetime.now(timezone.utc).isoformat(),
             "results":     [],
         }
