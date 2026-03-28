@@ -2,7 +2,7 @@
 
 All three options operate on C/C++ functions extracted from source files:
   Option 1: send function body directly to local LLM
-  Option 2: local LLM summarises → user edits/approves → external LLM identifies OSS
+  Option 2: local LLM batch-summarises all → user reviews → external LLM identifies OSS
   Option 3: send function body directly to external LLM
 """
 
@@ -15,11 +15,11 @@ from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
-    QCheckBox,
     QComboBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QRadioButton,
+    QSizePolicy,
     QSplitter,
     QTextEdit,
     QVBoxLayout,
@@ -35,7 +36,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QColor, QFont
 
 from analyzer.classifier import Classification, ClassificationResult, ClassifiedFile
-from analyzer.models import Component, FunctionSummary
+from analyzer.models import Component
 from analyzer.parser import extract_functions, FunctionInfo
 from llm.local_llm import LocalLLM
 from llm.external_llm import ExternalLLM
@@ -43,7 +44,7 @@ from llm.results import LLMResultsStore
 from i18n import t
 
 
-# ── Classification filter ──────────────────────────────────────────────────────
+# ── Classification colours ─────────────────────────────────────────────────────
 
 _CLASS_BG: dict[Classification, str] = {
     Classification.CONFIRMED: "#d4edda",
@@ -62,8 +63,10 @@ OPTION_1_LOCAL_DIRECT    = 1
 OPTION_2_LOCAL_SUMMARY   = 2
 OPTION_3_EXTERNAL_DIRECT = 3
 
+_MAX_NAME_LEN = 40   # truncate long function names in progress label
 
-# ── Key type for per-function storage ─────────────────────────────────────────
+
+# ── Key type ──────────────────────────────────────────────────────────────────
 
 def _fn_key(fn: FunctionInfo) -> tuple:
     return (fn.file_path, fn.name, fn.start_line)
@@ -72,11 +75,9 @@ def _fn_key(fn: FunctionInfo) -> tuple:
 # ── Background workers ─────────────────────────────────────────────────────────
 
 class _ExtractWorker(QThread):
-    """Extracts C/C++ functions from a list of files."""
-
-    progress = Signal(int, int, str)   # current, total, filename
-    finished = Signal(list)            # list[FunctionInfo]
-    error    = Signal(str)
+    progress  = Signal(int, int, str)
+    finished  = Signal(list)
+    error     = Signal(str)
 
     def __init__(self, files: list[ClassifiedFile]) -> None:
         super().__init__()
@@ -95,36 +96,16 @@ class _ExtractWorker(QThread):
             self.error.emit(str(exc))
 
 
-
-class _SummariseWorker(QThread):
-    """Summarises a single function body via local LLM (Option 2 step a–b)."""
-
-    finished = Signal(str)   # summary text
-    error    = Signal(str)
-
-    def __init__(self, function_body: str, llm: LocalLLM) -> None:
-        super().__init__()
-        self._function_body = function_body
-        self._llm = llm
-
-    def run(self) -> None:
-        try:
-            result = self._llm.summarise_function(self._function_body)
-            self.finished.emit(result)
-        except Exception as exc:
-            self.error.emit(str(exc))
-
-
 class _BatchWorker(QThread):
-    """Runs LLM analysis on multiple functions sequentially (Options 1 / 3)."""
+    """Generic batch LLM worker (Options 1 / 2 / 3)."""
 
-    fn_started  = Signal(int, int, str)   # current, total, func_name
-    fn_finished = Signal(object, str)     # FunctionInfo, hint
+    fn_started   = Signal(int, int, str)   # current, total, func_name
+    fn_finished  = Signal(object, str)     # FunctionInfo, result_text
     all_finished = Signal()
 
     def __init__(self, functions: list[FunctionInfo], llm_callable) -> None:
         super().__init__()
-        self._functions   = functions
+        self._functions    = functions
         self._llm_callable = llm_callable
 
     def run(self) -> None:
@@ -133,10 +114,10 @@ class _BatchWorker(QThread):
                 break
             self.fn_started.emit(i, len(self._functions), fn.name)
             try:
-                hint = self._llm_callable(fn.body)
+                result = self._llm_callable(fn.body)
             except Exception as exc:
-                hint = f"[ERROR] {exc}"
-            self.fn_finished.emit(fn, hint)
+                result = f"[ERROR] {exc}"
+            self.fn_finished.emit(fn, result)
         self.all_finished.emit()
 
 
@@ -146,7 +127,7 @@ class ReviewView(QWidget):
     """Screen 3: LLM SCA review at the function level."""
 
     back_requested   = Signal()
-    export_requested = Signal(list)  # list[Component]
+    export_requested = Signal(list)   # list[Component]
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -156,15 +137,17 @@ class ReviewView(QWidget):
         self._source_root: Optional[Path] = None
         self._preselected_paths: Optional[set[Path]] = None
 
-        # Extracted functions and current selection
         self._extracted_functions: list[FunctionInfo] = []
         self._current_fn: Optional[FunctionInfo] = None
 
-        # Per-function storage: key = (file_path, func_name, start_line)
-        self._fn_hints: dict[tuple, str] = {}
-        self._fn_summaries: dict[tuple, FunctionSummary] = {}
+        # Per-function results (key = (file_path, func_name, start_line))
+        self._fn_hints:     dict[tuple, str] = {}
+        self._fn_summaries: dict[tuple, str] = {}   # option-2 intermediate summaries
+        self._fn_matches:   dict[tuple, tuple[str, str]] = {}  # (component, license)
 
         self._worker: Optional[QThread] = None
+        # "analyse" → store in _fn_hints  /  "summarise" → store in _fn_summaries
+        self._batch_mode: str = "analyse"
         self._current_option: int = OPTION_1_LOCAL_DIRECT
         self._store: Optional[LLMResultsStore] = None
 
@@ -192,24 +175,26 @@ class ReviewView(QWidget):
         source_root: Optional[Path] = None,
         preselected_paths: Optional[list[Path]] = None,
     ) -> None:
-        self._all_files          = classification.all_files
-        self._components         = components
-        self._source_root        = source_root
-        self._preselected_paths  = set(preselected_paths) if preselected_paths else None
+        self._all_files         = classification.all_files
+        self._components        = components
+        self._source_root       = source_root
+        self._preselected_paths = set(preselected_paths) if preselected_paths else None
         self._extracted_functions = []
         self._current_fn          = None
         self._fn_hints.clear()
         self._fn_summaries.clear()
+        self._fn_matches.clear()
 
-        # Init persistence store and auto-load existing results
         if source_root:
             self._store = LLMResultsStore(source_root)
-            loaded = self._store.hints_by_key()
-            if loaded:
-                self._fn_hints.update(loaded)
-                self._results_label.setText(t("loaded_results", count=len(loaded)))
-            else:
-                self._results_label.setText("")
+            hints   = self._store.hints_by_key()
+            matches = self._store.matches_by_key()
+            if hints:
+                self._fn_hints.update(hints)
+            if matches:
+                self._fn_matches.update(matches)
+            count = len(hints)
+            self._results_label.setText(t("loaded_results", count=count) if count else "")
         else:
             self._store = None
             self._results_label.setText("")
@@ -218,6 +203,8 @@ class ReviewView(QWidget):
         self._function_list.clear()
         self._body_view.clear()
         self._hint_edit.clear()
+        self._comp_edit.clear()
+        self._lic_edit.clear()
 
     # ── UI ─────────────────────────────────────────────────────────────────────
 
@@ -252,7 +239,7 @@ class ReviewView(QWidget):
         h_splitter = QSplitter(Qt.Orientation.Horizontal)
         root.addWidget(h_splitter, 1)
 
-        # ── Left: file list (top) + function list (bottom) ─────────────────────
+        # ── Left panel ────────────────────────────────────────────────────────
         left_splitter = QSplitter(Qt.Orientation.Vertical)
 
         # File list pane
@@ -276,9 +263,7 @@ class ReviewView(QWidget):
 
         file_layout.addWidget(QLabel(t("file_list_label")))
         self._file_list = QListWidget()
-        self._file_list.setSelectionMode(
-            QAbstractItemView.SelectionMode.ExtendedSelection
-        )
+        self._file_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._file_list.itemSelectionChanged.connect(self._on_file_selection_changed)
         file_layout.addWidget(self._file_list)
 
@@ -299,14 +284,25 @@ class ReviewView(QWidget):
         self._function_list.currentRowChanged.connect(self._on_function_selected)
         fn_layout.addWidget(self._function_list)
 
+        # Status label – fixed size to prevent layout shifts
         self._results_label = QLabel("")
         self._results_label.setStyleSheet("color: #555; font-size: 11px;")
+        self._results_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+        )
         fn_layout.addWidget(self._results_label)
 
         btn_row = QHBoxLayout()
         self._analyse_btn = QPushButton(t("analyse_btn"))
         self._analyse_btn.clicked.connect(self._on_batch_clicked)
         btn_row.addWidget(self._analyse_btn)
+
+        # Option-2 only: send to external LLM after summaries are ready
+        self._opt2_ext_btn = QPushButton(t("option2_send_external_btn"))
+        self._opt2_ext_btn.clicked.connect(self._on_opt2_send_external_clicked)
+        self._opt2_ext_btn.setVisible(False)
+        btn_row.addWidget(self._opt2_ext_btn)
+
         delete_btn = QPushButton(t("delete_results_btn"))
         delete_btn.clicked.connect(self._on_delete_results_clicked)
         btn_row.addWidget(delete_btn)
@@ -316,7 +312,7 @@ class ReviewView(QWidget):
         left_splitter.setSizes([200, 200])
         h_splitter.addWidget(left_splitter)
 
-        # ── Right: body viewer + option-2 panel + hint ─────────────────────────
+        # ── Right panel ────────────────────────────────────────────────────────
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(4, 0, 0, 0)
@@ -331,27 +327,15 @@ class ReviewView(QWidget):
         body_layout.addWidget(self._body_view)
         right_layout.addWidget(body_group, 2)
 
-        # Option 2 panel (summary edit + approve)
+        # Option-2 summary panel (visible only for opt2)
         self._opt2_panel = QGroupBox(t("opt2_panel_title"))
         opt2_layout = QVBoxLayout(self._opt2_panel)
-
         self._summary_edit = QPlainTextEdit()
         self._summary_edit.setPlaceholderText(t("opt2_summary_placeholder"))
         opt2_layout.addWidget(self._summary_edit)
-
-        approve_row = QHBoxLayout()
-        self._approve_check = QCheckBox(t("approve_checkbox"))
-        approve_row.addWidget(self._approve_check)
-        save_btn = QPushButton(t("save_btn"))
-        save_btn.clicked.connect(self._on_save_summary)
-        approve_row.addWidget(save_btn)
-        send_ext_btn = QPushButton(t("send_external_btn"))
-        send_ext_btn.clicked.connect(self._on_send_external)
-        approve_row.addWidget(send_ext_btn)
-        opt2_layout.addLayout(approve_row)
         right_layout.addWidget(self._opt2_panel, 1)
 
-        # Hint display (shared)
+        # Hint display
         hint_group = QGroupBox(t("hint_group_title"))
         hint_layout = QVBoxLayout(hint_group)
         self._hint_edit = QTextEdit()
@@ -359,6 +343,24 @@ class ReviewView(QWidget):
         self._hint_edit.setPlaceholderText(t("hint_placeholder"))
         hint_layout.addWidget(self._hint_edit)
         right_layout.addWidget(hint_group, 1)
+
+        # Match decision
+        match_group = QGroupBox(t("match_group_title"))
+        match_layout = QVBoxLayout(match_group)
+        match_fields = QHBoxLayout()
+        match_fields.addWidget(QLabel(t("component_label")))
+        self._comp_edit = QLineEdit()
+        self._comp_edit.setPlaceholderText(t("component_placeholder"))
+        match_fields.addWidget(self._comp_edit, 2)
+        match_fields.addWidget(QLabel(t("license_label_match")))
+        self._lic_edit = QLineEdit()
+        self._lic_edit.setPlaceholderText(t("license_placeholder"))
+        match_fields.addWidget(self._lic_edit, 1)
+        match_btn = QPushButton(t("match_btn"))
+        match_btn.clicked.connect(self._on_match_clicked)
+        match_fields.addWidget(match_btn)
+        match_layout.addLayout(match_fields)
+        right_layout.addWidget(match_group)
 
         h_splitter.addWidget(right)
         h_splitter.setSizes([280, 820])
@@ -375,7 +377,7 @@ class ReviewView(QWidget):
         bottom_row.addWidget(back_btn)
         bottom_row.addStretch()
         export_btn = QPushButton(t("sbom_export_btn"))
-        export_btn.clicked.connect(lambda: self.export_requested.emit(self._components))
+        export_btn.clicked.connect(self._on_export_clicked)
         bottom_row.addWidget(export_btn)
         root.addLayout(bottom_row)
 
@@ -389,10 +391,13 @@ class ReviewView(QWidget):
             self._update_ui_for_option(option_id)
 
     def _update_ui_for_option(self, option_id: int) -> None:
-        self._opt2_panel.setVisible(option_id == OPTION_2_LOCAL_SUMMARY)
+        is_opt2 = option_id == OPTION_2_LOCAL_SUMMARY
+        self._opt2_panel.setVisible(is_opt2)
+        self._opt2_ext_btn.setVisible(is_opt2)
+
         labels = {
             OPTION_1_LOCAL_DIRECT:    t("option1_label"),
-            OPTION_2_LOCAL_SUMMARY:   t("option2_label"),
+            OPTION_2_LOCAL_SUMMARY:   t("option2_summarise_label"),
             OPTION_3_EXTERNAL_DIRECT: t("option3_label"),
         }
         self._analyse_btn.setText(labels.get(option_id, t("analyse_btn_default")))
@@ -418,8 +423,7 @@ class ReviewView(QWidget):
     def _refresh_file_list(self) -> None:
         self._file_list.clear()
         for cf in self._filtered_files():
-            label = self._file_label(cf)
-            item = QListWidgetItem(label)
+            item = QListWidgetItem(self._file_label(cf))
             item.setBackground(QColor(_CLASS_BG[cf.classification]))
             item.setForeground(QColor(_CLASS_FG[cf.classification]))
             self._file_list.addItem(item)
@@ -444,11 +448,9 @@ class ReviewView(QWidget):
 
     @Slot()
     def _on_file_selection_changed(self) -> None:
-        # Selection change only clears the view; functions are extracted on demand
         pass
 
     def _selected_classified_files(self) -> list[ClassifiedFile]:
-        """Return ClassifiedFile objects for currently selected rows in file list."""
         filtered = self._filtered_files()
         return [
             filtered[idx.row()]
@@ -459,9 +461,7 @@ class ReviewView(QWidget):
     # ── Function extraction ────────────────────────────────────────────────────
 
     def _on_extract_clicked(self) -> None:
-        files = self._selected_classified_files()
-        if not files:
-            files = self._filtered_files()
+        files = self._selected_classified_files() or self._filtered_files()
         if not files:
             QMessageBox.information(self, t("no_target_title"), t("no_target_msg"))
             return
@@ -489,8 +489,13 @@ class ReviewView(QWidget):
     def _refresh_function_list(self) -> None:
         self._function_list.clear()
         for fn in self._extracted_functions:
-            has_result = _fn_key(fn) in self._fn_hints or _fn_key(fn) in self._fn_summaries
-            marker = "✓ " if has_result else ""
+            key = _fn_key(fn)
+            if key in self._fn_matches:
+                marker = "\u2713 "   # ✓ matched
+            elif key in self._fn_hints or key in self._fn_summaries:
+                marker = "~ "        # has result, not yet matched
+            else:
+                marker = "  "
             rel = fn.file_path
             if self._source_root:
                 try:
@@ -510,103 +515,51 @@ class ReviewView(QWidget):
             self._body_view.clear()
             self._hint_edit.clear()
             self._summary_edit.clear()
+            self._comp_edit.clear()
+            self._lic_edit.clear()
             return
 
         fn = self._current_fn = self._extracted_functions[row]
-        self._body_view.setPlainText(fn.body)
+        self._body_view.setPlainText(fn.body.lstrip('\n'))
 
         key = _fn_key(fn)
         self._hint_edit.setPlainText(self._fn_hints.get(key, ""))
+        self._summary_edit.setPlainText(self._fn_summaries.get(key, ""))
 
-        if key in self._fn_summaries:
-            fs = self._fn_summaries[key]
-            self._summary_edit.setPlainText(fs.summary)
-            self._approve_check.setChecked(fs.approved)
-        else:
-            self._summary_edit.clear()
-            self._approve_check.setChecked(False)
+        comp, lic = self._fn_matches.get(key, ("", ""))
+        self._comp_edit.setText(comp)
+        self._lic_edit.setText(lic)
 
-    # ── Option 2: summarise (manual, per-function) ────────────────────────────
+    # ── Option 2: save edited summary ─────────────────────────────────────────
 
-    def _run_summarise(self) -> None:
-        if not self._current_fn:
-            QMessageBox.information(self, t("no_selection_title"), t("no_selection_msg"))
-            return
-        if not self._local_llm.is_available():
-            QMessageBox.warning(
-                self, t("ollama_not_connected_title"),
-                t("ollama_not_connected_msg", api_base=self._local_llm.api_base),
-            )
-            return
-
-        self._set_busy(True)
-        self._worker = _SummariseWorker(self._current_fn.body, self._local_llm)
-        self._worker.finished.connect(self._on_summarise_finished)
-        self._worker.error.connect(self._on_worker_error)
-        self._worker.start()
-
-    @Slot(str)
-    def _on_summarise_finished(self, summary: str) -> None:
-        self._set_busy(False)
+    def _save_current_summary(self) -> None:
+        """Save the edited summary text back to _fn_summaries."""
         if not self._current_fn:
             return
-        key = _fn_key(self._current_fn)
-        fn = self._current_fn
-        fs = FunctionSummary(
-            function_name=fn.name,
-            file_path=fn.file_path,
-            start_line=fn.start_line,
-            end_line=fn.end_line,
-            body=fn.body,
-            summary=summary,
+        self._fn_summaries[_fn_key(self._current_fn)] = (
+            self._summary_edit.toPlainText().strip()
         )
-        self._fn_summaries[key] = fs
-        self._summary_edit.setPlainText(summary)
-        self._approve_check.setChecked(False)
 
-    def _on_save_summary(self) -> None:
+    # ── Match decision ─────────────────────────────────────────────────────────
+
+    def _on_match_clicked(self) -> None:
         if not self._current_fn:
             return
-        key = _fn_key(self._current_fn)
-        fn = self._current_fn
-        if key not in self._fn_summaries:
-            self._fn_summaries[key] = FunctionSummary(
-                function_name=fn.name,
-                file_path=fn.file_path,
-                start_line=fn.start_line,
-                end_line=fn.end_line,
-                body=fn.body,
-            )
-        fs = self._fn_summaries[key]
-        fs.summary  = self._summary_edit.toPlainText().strip()
-        fs.approved = self._approve_check.isChecked()
+        comp = self._comp_edit.text().strip()
+        lic  = self._lic_edit.text().strip()
+        key  = _fn_key(self._current_fn)
+        self._fn_matches[key] = (comp, lic)
+        if self._store:
+            self._store.save_match(self._current_fn, comp, lic)
         self._refresh_function_list()
+        # Restore selection
+        row = self._extracted_functions.index(self._current_fn)
+        self._function_list.setCurrentRow(row)
 
-    def _on_send_external(self) -> None:
-        approved = [
-            fs.summary for fs in self._fn_summaries.values()
-            if fs.approved and fs.summary and not fs.summary.startswith("[ERROR]")
-        ]
-        if not approved:
-            QMessageBox.information(
-                self, t("no_approved_title"), t("no_approved_msg"),
-            )
-            return
-        try:
-            hint = self._external_llm.find_similar_oss(approved)
-            self._hint_edit.setPlainText(hint or t("no_hint"))
-        except Exception as exc:
-            QMessageBox.critical(self, t("external_llm_error_title"), str(exc))
-
-    # ── Batch analysis (Options 1 / 3) ────────────────────────────────────────
+    # ── Batch analysis ─────────────────────────────────────────────────────────
 
     def _on_batch_clicked(self) -> None:
         option = self._selected_option()
-        if option == OPTION_2_LOCAL_SUMMARY:
-            QMessageBox.information(
-                self, t("opt2_batch_unsupported_title"), t("opt2_batch_unsupported_msg"),
-            )
-            return
 
         if not self._extracted_functions:
             QMessageBox.information(self, t("no_functions_title"), t("no_functions_msg"))
@@ -617,8 +570,18 @@ class ReviewView(QWidget):
                 QMessageBox.warning(self, t("ollama_not_connected_title"),
                     t("ollama_not_connected_msg_short", api_base=self._local_llm.api_base))
                 return
-            llm_callable = self._local_llm.query_direct
-        else:
+            self._start_batch("analyse", self._extracted_functions,
+                              self._local_llm.query_direct, option)
+
+        elif option == OPTION_2_LOCAL_SUMMARY:
+            if not self._local_llm.is_available():
+                QMessageBox.warning(self, t("ollama_not_connected_title"),
+                    t("ollama_not_connected_msg_short", api_base=self._local_llm.api_base))
+                return
+            self._start_batch("summarise", self._extracted_functions,
+                              self._local_llm.summarise_function, option)
+
+        else:  # OPTION_3
             confirm = QMessageBox.question(
                 self, t("confirm_send_external_title"),
                 t("confirm_send_external_msg", count=len(self._extracted_functions)),
@@ -626,11 +589,55 @@ class ReviewView(QWidget):
             )
             if confirm != QMessageBox.StandardButton.Yes:
                 return
-            llm_callable = self._external_llm.query_direct
+            self._start_batch("analyse", self._extracted_functions,
+                              self._external_llm.query_direct, option)
 
+    def _on_opt2_send_external_clicked(self) -> None:
+        """Option 2 step 2: send all summaries to external LLM."""
+        # Save any pending edits to the current function's summary
+        self._save_current_summary()
+
+        fns_with_summary = [
+            fn for fn in self._extracted_functions
+            if self._fn_summaries.get(_fn_key(fn), "").strip()
+        ]
+        if not fns_with_summary:
+            QMessageBox.information(self, t("no_summaries_title"), t("no_summaries_msg"))
+            return
+
+        confirm = QMessageBox.question(
+            self, t("confirm_send_external_title"),
+            t("confirm_send_external_msg", count=len(fns_with_summary)),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        # Build copies of FunctionInfo using summary as the "body"
+        fn_copies = [
+            FunctionInfo(
+                name=fn.name,
+                file_path=fn.file_path,
+                start_line=fn.start_line,
+                end_line=fn.end_line,
+                body=self._fn_summaries[_fn_key(fn)],
+            )
+            for fn in fns_with_summary
+        ]
+        self._start_batch("analyse", fn_copies,
+                          self._external_llm.query_direct, OPTION_2_LOCAL_SUMMARY)
+
+    def _start_batch(
+        self,
+        mode: str,
+        functions: list[FunctionInfo],
+        llm_callable,
+        option: int,
+    ) -> None:
+        self._batch_mode     = mode
         self._current_option = option
         self._set_busy(True)
-        self._worker = _BatchWorker(self._extracted_functions, llm_callable)
+        self._worker = _BatchWorker(functions, llm_callable)
         self._worker.fn_started.connect(self._on_batch_fn_started)
         self._worker.fn_finished.connect(self._on_batch_fn_finished)
         self._worker.all_finished.connect(self._on_batch_all_finished)
@@ -640,22 +647,43 @@ class ReviewView(QWidget):
     def _on_batch_fn_started(self, current: int, total: int, name: str) -> None:
         self._progress_bar.setRange(0, total)
         self._progress_bar.setValue(current)
-        self._results_label.setText(t("analysing_progress", current=current + 1, total=total, name=name))
+        name_display = name[:_MAX_NAME_LEN] + "\u2026" if len(name) > _MAX_NAME_LEN else name
+        if self._batch_mode == "summarise":
+            self._results_label.setText(
+                t("summarise_progress", current=current + 1, total=total, name=name_display)
+            )
+        else:
+            self._results_label.setText(
+                t("analysing_progress", current=current + 1, total=total, name=name_display)
+            )
 
     @Slot(object, str)
-    def _on_batch_fn_finished(self, fn: FunctionInfo, hint: str) -> None:
-        self._fn_hints[_fn_key(fn)] = hint
-        # Auto-save
-        if self._store:
-            self._store.save_result(fn, self._current_option, hint)
-        if self._current_fn and _fn_key(fn) == _fn_key(self._current_fn):
-            self._hint_edit.setPlainText(hint)
+    def _on_batch_fn_finished(self, fn: FunctionInfo, result: str) -> None:
+        key = _fn_key(fn)
+        if self._batch_mode == "summarise":
+            self._fn_summaries[key] = result
+        else:
+            self._fn_hints[key] = result
+            if self._store:
+                self._store.save_result(fn, self._current_option, result)
+
+        if self._current_fn and key == _fn_key(self._current_fn):
+            if self._batch_mode == "summarise":
+                self._summary_edit.setPlainText(result)
+            else:
+                self._hint_edit.setPlainText(result)
 
     @Slot()
     def _on_batch_all_finished(self) -> None:
         self._set_busy(False)
-        count = len(self._fn_hints)
-        self._results_label.setText(t("analysis_complete", count=count))
+        if self._batch_mode == "summarise":
+            self._results_label.setText(
+                t("summarise_complete", count=len(self._fn_summaries))
+            )
+        else:
+            self._results_label.setText(
+                t("analysis_complete", count=len(self._fn_hints))
+            )
         self._refresh_function_list()
 
     # ── Delete results ─────────────────────────────────────────────────────────
@@ -672,9 +700,45 @@ class ReviewView(QWidget):
             return
         self._store.delete()
         self._fn_hints.clear()
+        self._fn_summaries.clear()
+        self._fn_matches.clear()
         self._results_label.setText(t("results_deleted"))
         self._refresh_function_list()
         self._hint_edit.clear()
+
+    # ── SBOM export ────────────────────────────────────────────────────────────
+
+    def _on_export_clicked(self) -> None:
+        self._apply_matches_to_components()
+        self.export_requested.emit(self._components)
+
+    def _apply_matches_to_components(self) -> None:
+        """Update component name/license based on user match decisions."""
+        if not self._fn_matches:
+            return
+
+        # Build file_path → (component_name, license) from all matched functions
+        file_matches: dict[Path, tuple[str, str]] = {}
+        for fn in self._extracted_functions:
+            key = _fn_key(fn)
+            if key in self._fn_matches:
+                comp_name, lic = self._fn_matches[key]
+                if comp_name or lic:
+                    file_matches[fn.file_path.resolve()] = (comp_name, lic)
+
+        if not file_matches:
+            return
+
+        for comp in self._components:
+            for file_path in comp.files:
+                match = file_matches.get(file_path.resolve())
+                if match:
+                    comp_name, lic = match
+                    if comp_name:
+                        comp.name = comp_name
+                    if lic:
+                        comp.license_expression = lic
+                    break  # first matched function in this component wins
 
     # ── Shared helpers ─────────────────────────────────────────────────────────
 

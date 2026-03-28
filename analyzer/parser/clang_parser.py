@@ -61,7 +61,7 @@ def extract_functions_clang(
             try:
                 lines = file_path.read_text(encoding='utf-8', errors='replace').splitlines()
                 body_lines = lines[start_line - 1:end_line]
-                body = '\n'.join(body_lines)
+                body = '\n'.join(body_lines).strip('\n')
             except OSError:
                 body = ''
 

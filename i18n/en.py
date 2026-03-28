@@ -62,11 +62,21 @@ STRINGS: dict[str, str] = {
 
     "hint_group_title":     "LLM Hints (for reference – not confirmed information)",
     "hint_placeholder":     "Run LLM analysis to see hints here.",
+    "match_group_title":    "Match Decision (user judgment)",
+    "component_label":      "Component:",
+    "component_placeholder":"e.g. zlib 1.2.11",
+    "license_label_match":  "License:",
+    "license_placeholder":  "e.g. MIT",
+    "match_btn":            "Match",
+    "summarise_progress":   "Summarising {current}/{total}: {name}",
+    "summarise_complete":   "Summaries generated ({count} function(s))",
 
     "option1_label":        "Analyse directly with local LLM",
     "option2_label":        "Generate summary with local LLM",
     "option3_label":        "Analyse directly with external LLM",
     "analyse_btn_default":  "Analyse with LLM",
+    "option2_summarise_label":     "Generate summaries with local LLM",
+    "option2_send_external_btn":   "Analyse with external LLM (confidential info protection)",
 
     "no_target_title":      "No Target",
     "no_target_msg":        "No files to analyse.",
@@ -88,6 +98,8 @@ STRINGS: dict[str, str] = {
         "and does not support batch analysis.",
     "no_functions_title":   "No Functions",
     "no_functions_msg":     "Please run 'Extract Functions from Selected Files' first.",
+    "no_summaries_title":   "No Summaries",
+    "no_summaries_msg":     "Please generate summaries first.",
     "confirm_send_external_title": "Confirm Send to External LLM",
     "confirm_send_external_msg":
         "Sending source code of {count} function(s) directly to external LLM.\n"

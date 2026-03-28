@@ -95,6 +95,54 @@ class LLMResultsStore:
         if self._results_path.exists():
             self._results_path.unlink()
 
+    def save_match(self, fn: FunctionInfo, component_name: str, license_str: str) -> None:
+        """Persist user match decision (component + license) for *fn*."""
+        raw = self._load_raw()
+        results: list[dict] = raw.get("results", [])
+
+        rel_file = self._rel(fn.file_path)
+        # Find existing entry or create a stub
+        for i, r in enumerate(results):
+            if (r.get("file") == rel_file
+                    and r.get("function") == fn.name
+                    and r.get("start_line") == fn.start_line):
+                results[i]["matched_component"] = component_name
+                results[i]["matched_license"]   = license_str
+                break
+        else:
+            results.append({
+                "file":              rel_file,
+                "function":          fn.name,
+                "start_line":        fn.start_line,
+                "option":            0,
+                "hint":              "",
+                "matched_component": component_name,
+                "matched_license":   license_str,
+            })
+
+        raw["results"]    = results
+        raw["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self._results_path.parent.mkdir(parents=True, exist_ok=True)
+        self._results_path.write_text(
+            json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+    def matches_by_key(self) -> dict[tuple, tuple[str, str]]:
+        """Return a dict mapping (abs_file_path, func_name, start_line) → (component, license)."""
+        out: dict[tuple, tuple[str, str]] = {}
+        for r in self.load():
+            comp = r.get("matched_component", "")
+            lic  = r.get("matched_license", "")
+            if not comp and not lic:
+                continue
+            try:
+                abs_path = (self._source_root / r["file"]).resolve()
+                key = (abs_path, r["function"], r["start_line"])
+                out[key] = (comp, lic)
+            except Exception:
+                pass
+        return out
+
     def hints_by_key(self) -> dict[tuple, str]:
         """Return a dict mapping (abs_file_path, func_name, start_line) → hint.
 
