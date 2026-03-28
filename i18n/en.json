@@ -1,5 +1,5 @@
 {
-  "app_title": "Izumi – OSS Detection & SBOM Support",
+  "app_title": "Izumi",
   "browse_btn": "Browse…",
   "back_to_scan_btn": "← Back to Scan Results",
   "sbom_export_btn": "SBOM Export →",
@@ -105,7 +105,7 @@
   "export_complete_title": "Export Complete",
   "export_complete_msg": "SBOM exported to:\n{out_path}",
   "export_error_title": "Export Error",
-  "window_title": "Izumi – OSS Detection & SBOM",
+  "window_title": "Izumi",
   "file_menu": "File(&F)",
   "new_scan_action": "New Scan(&N)",
   "quit_action": "Quit(&Q)",
@@ -125,5 +125,8 @@
   "prompt_direct_oss_user": "Identify what OSS this C/C++ function belongs to. Respond with JSON only.\n\n```c\n{source_code}\n```",
   "prompt_oss_similarity_system": "You are a software licensing expert. Given a natural language description of a C/C++ function, identify the open-source library it most likely belongs to. Respond with a JSON object containing exactly three keys: \"component\" (library name and version, e.g. \"zlib 1.2.11\"), \"license\" (SPDX identifier, e.g. \"Zlib\"), and \"hint\" (a brief explanation of your reasoning). If you are not confident about component or license, use \"NOASSERTION\" for that field. Never fabricate library names or version numbers. Output only the JSON object, no other text.",
   "prompt_oss_similarity_user": "Identify the open-source library this C/C++ function description most likely belongs to.\nRespond with JSON only.\n\n{summaries}",
-  "parse_error_msg": "LLM response format was invalid. Please re-run the analysis."
+  "parse_error_msg": "LLM response format was invalid. Please re-run the analysis.",
+  "model_not_set_title": "Model Not Configured",
+  "local_model_not_set_msg": "Local LLM model name is not set.\nPlease enter it in Settings.",
+  "external_model_not_set_msg": "External LLM model name is not set.\nPlease enter it in Settings."
 }

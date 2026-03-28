@@ -48,13 +48,13 @@ class TestFindSimilarOss:
     @patch("llm.external_llm.completion")
     def test_returns_hint(self, mock_completion):
         mock_completion.return_value = _mock_completion("Possibly similar to zlib crc32().")
-        llm = ExternalLLM()
+        llm = ExternalLLM("anthropic/claude-sonnet-4-6")
         result = llm.find_similar_oss(["computes CRC32"])
         assert "zlib" in result
 
     @patch("llm.external_llm.completion")
     def test_empty_list_returns_empty_string(self, mock_completion):
-        llm = ExternalLLM()
+        llm = ExternalLLM("anthropic/claude-sonnet-4-6")
         result = llm.find_similar_oss([])
         mock_completion.assert_not_called()
         assert result == ""
@@ -62,7 +62,7 @@ class TestFindSimilarOss:
     @patch("llm.external_llm.completion")
     def test_error_returns_error_prefix(self, mock_completion):
         mock_completion.side_effect = Exception("API timeout")
-        llm = ExternalLLM()
+        llm = ExternalLLM("anthropic/claude-sonnet-4-6")
         result = llm.find_similar_oss(["some summary"])
         assert result.startswith("[ERROR]")
 
@@ -77,7 +77,7 @@ class TestFindSimilarOss:
     @patch("llm.external_llm.completion")
     def test_strips_whitespace(self, mock_completion):
         mock_completion.return_value = _mock_completion("  Result.  \n")
-        llm = ExternalLLM()
+        llm = ExternalLLM("anthropic/claude-sonnet-4-6")
         result = llm.find_similar_oss(["s"])
         assert result == "Result."
 
@@ -92,7 +92,7 @@ class TestAnalyseComponent:
             tmp_path,
             [("computes hash", True)],
         )
-        llm = ExternalLLM()
+        llm = ExternalLLM("anthropic/claude-sonnet-4-6")
         result = llm.analyse_component(comp)
         assert result is comp
         assert "openssl" in result.oss_hint
@@ -107,7 +107,7 @@ class TestAnalyseComponent:
                 ("not approved", False),
             ],
         )
-        llm = ExternalLLM()
+        llm = ExternalLLM("anthropic/claude-sonnet-4-6")
         llm.analyse_component(comp)
 
         call_args = mock_completion.call_args[1]["messages"]
@@ -121,7 +121,7 @@ class TestAnalyseComponent:
             tmp_path,
             [("unapproved", False)],
         )
-        llm = ExternalLLM()
+        llm = ExternalLLM("anthropic/claude-sonnet-4-6")
         llm.analyse_component(comp)
         mock_completion.assert_not_called()
         assert comp.oss_hint == ""
@@ -136,7 +136,7 @@ class TestAnalyseComponent:
                 ("valid summary", True),
             ],
         )
-        llm = ExternalLLM()
+        llm = ExternalLLM("anthropic/claude-sonnet-4-6")
         llm.analyse_component(comp)
 
         user_content = next(

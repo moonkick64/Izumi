@@ -77,7 +77,7 @@ class SettingsView(QWidget):
         ext_group = QGroupBox(t("external_llm_group"))
         ext_form = QFormLayout(ext_group)
 
-        self._ext_model_edit = QLineEdit("claude-sonnet-4-20250514")
+        self._ext_model_edit = QLineEdit("anthropic/claude-sonnet-4-6")
         ext_form.addRow(t("model_label"), self._ext_model_edit)
 
         self._api_key_edit = QLineEdit()

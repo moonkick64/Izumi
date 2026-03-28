@@ -25,7 +25,7 @@ class LocalLLM:
 
     def __init__(
         self,
-        model: str = "ollama/codellama",
+        model: str,
         api_base: str = "http://localhost:11434",
         timeout: int = 60,
     ) -> None:

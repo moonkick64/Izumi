@@ -1,5 +1,5 @@
 {
-  "app_title": "Izumi – OSS 検出 & SBOM 支援",
+  "app_title": "Izumi",
   "browse_btn": "参照…",
   "back_to_scan_btn": "← スキャン結果に戻る",
   "sbom_export_btn": "SBOM 出力 →",
@@ -105,7 +105,7 @@
   "export_complete_title": "出力完了",
   "export_complete_msg": "SBOM を出力しました:\n{out_path}",
   "export_error_title": "出力エラー",
-  "window_title": "Izumi – OSS Detection & SBOM",
+  "window_title": "Izumi",
   "file_menu": "ファイル(&F)",
   "new_scan_action": "新規スキャン(&N)",
   "quit_action": "終了(&Q)",
@@ -125,5 +125,8 @@
   "prompt_direct_oss_user": "このC/C++関数がどのOSSに属するか特定してください。JSONのみで回答してください。\n\n```c\n{source_code}\n```",
   "prompt_oss_similarity_system": "あなたはソフトウェアライセンスの専門家です。C/C++関数の説明を読み、その関数が属する可能性の最も高いオープンソースライブラリを特定してください。\"component\"（ライブラリ名とバージョン、例: \"zlib 1.2.11\"）、\"license\"（SPDX識別子、例: \"Zlib\"）、\"hint\"（日本語での判断理由の説明）の3つのキーを持つJSONオブジェクトで回答してください。componentまたはlicenseに自信がない場合は \"NOASSERTION\" を使用してください。ライブラリ名やバージョン番号を捏造しないでください。JSONオブジェクトのみを出力し、他のテキストは含めないでください。",
   "prompt_oss_similarity_user": "このC/C++関数の説明が、どのオープンソースライブラリに属するか特定してください。JSONのみで回答してください。\n\n{summaries}",
-  "parse_error_msg": "LLMの応答フォーマットが不正でした。再度解析を実行してください。"
+  "parse_error_msg": "LLMの応答フォーマットが不正でした。再度解析を実行してください。",
+  "model_not_set_title": "モデル未設定",
+  "local_model_not_set_msg": "ローカルLLMのモデル名が設定されていません。\n設定画面で入力してください。",
+  "external_model_not_set_msg": "外部LLMのモデル名が設定されていません。\n設定画面で入力してください。"
 }

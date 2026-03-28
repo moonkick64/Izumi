@@ -154,8 +154,8 @@ class ReviewView(QWidget):
         self._current_option: int = OPTION_1_LOCAL_DIRECT
         self._store: Optional[LLMResultsStore] = None
 
-        self._local_llm    = LocalLLM()
-        self._external_llm = ExternalLLM()
+        self._local_llm:    Optional[LocalLLM]    = None
+        self._external_llm: Optional[ExternalLLM] = None
 
         self._build_ui()
 
@@ -163,13 +163,13 @@ class ReviewView(QWidget):
 
     def configure_llm(
         self,
-        ollama_url: str = "http://localhost:11434",
-        local_model: str = "ollama/codellama",
-        external_model: str = "claude-sonnet-4-20250514",
+        ollama_url: str,
+        local_model: str,
+        external_model: str,
         api_key: str = "",
     ) -> None:
-        self._local_llm    = LocalLLM(model=local_model, api_base=ollama_url)
-        self._external_llm = ExternalLLM(model=external_model, api_key=api_key)
+        self._local_llm    = LocalLLM(model=local_model, api_base=ollama_url) if local_model.strip() else None
+        self._external_llm = ExternalLLM(model=external_model, api_key=api_key) if external_model.strip() else None
 
     def set_data(
         self,
@@ -599,6 +599,9 @@ class ReviewView(QWidget):
             return
 
         if option == OPTION_1_LOCAL_DIRECT:
+            if not self._local_llm:
+                QMessageBox.warning(self, t("model_not_set_title"), t("local_model_not_set_msg"))
+                return
             if not self._local_llm.is_available():
                 QMessageBox.warning(self, t("ollama_not_connected_title"),
                     t("ollama_not_connected_msg_short", api_base=self._local_llm.api_base))
@@ -607,6 +610,9 @@ class ReviewView(QWidget):
                               self._local_llm.query_direct, option)
 
         elif option == OPTION_2_LOCAL_SUMMARY:
+            if not self._local_llm:
+                QMessageBox.warning(self, t("model_not_set_title"), t("local_model_not_set_msg"))
+                return
             if not self._local_llm.is_available():
                 QMessageBox.warning(self, t("ollama_not_connected_title"),
                     t("ollama_not_connected_msg_short", api_base=self._local_llm.api_base))
@@ -615,6 +621,9 @@ class ReviewView(QWidget):
                               self._local_llm.summarise_function, option)
 
         else:  # OPTION_3
+            if not self._external_llm:
+                QMessageBox.warning(self, t("model_not_set_title"), t("external_model_not_set_msg"))
+                return
             confirm = QMessageBox.question(
                 self, t("confirm_send_external_title"),
                 t("confirm_send_external_msg", count=len(self._extracted_functions)),
@@ -627,6 +636,10 @@ class ReviewView(QWidget):
 
     def _on_opt2_send_external_clicked(self) -> None:
         """Option 2 step 2: send all summaries to external LLM."""
+        if not self._external_llm:
+            QMessageBox.warning(self, t("model_not_set_title"), t("external_model_not_set_msg"))
+            return
+
         # Save any pending edits to the current function's summary
         self._save_current_summary()
 

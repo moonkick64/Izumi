@@ -33,21 +33,21 @@ class TestSummariseFunction:
     @patch("llm.local_llm.completion")
     def test_returns_summary(self, mock_completion):
         mock_completion.return_value = _mock_completion("Computes a CRC32 checksum.")
-        llm = LocalLLM()
+        llm = LocalLLM("ollama/codellama")
         result = llm.summarise_function("uint32_t crc32(const uint8_t *data, size_t len) {...}")
         assert result == "Computes a CRC32 checksum."
 
     @patch("llm.local_llm.completion")
     def test_strips_whitespace(self, mock_completion):
         mock_completion.return_value = _mock_completion("  Summary text.  \n")
-        llm = LocalLLM()
+        llm = LocalLLM("ollama/codellama")
         result = llm.summarise_function("void foo() {}")
         assert result == "Summary text."
 
     @patch("llm.local_llm.completion")
     def test_error_returns_error_prefix(self, mock_completion):
         mock_completion.side_effect = Exception("connection refused")
-        llm = LocalLLM()
+        llm = LocalLLM("ollama/codellama")
         result = llm.summarise_function("void foo() {}")
         assert result.startswith("[ERROR]")
         assert "connection refused" in result
@@ -76,7 +76,7 @@ class TestSummariseComponent:
         comp = make_component(tmp_path)
         comp.files = [c_file]
 
-        llm = LocalLLM()
+        llm = LocalLLM("ollama/codellama")
         result = llm.summarise_component(comp)
 
         assert result is comp  # Returns the same object
@@ -86,7 +86,7 @@ class TestSummariseComponent:
     def test_empty_files_no_summaries(self, mock_completion, tmp_path):
         comp = make_component(tmp_path)
         comp.files = []
-        llm = LocalLLM()
+        llm = LocalLLM("ollama/codellama")
         result = llm.summarise_component(comp)
         assert result.function_summaries == []
 
@@ -101,7 +101,7 @@ class TestSummariseComponent:
         comp.files = [c_file]
 
         calls = []
-        llm = LocalLLM()
+        llm = LocalLLM("ollama/codellama")
         llm.summarise_component(comp, progress_callback=lambda i, n, name: calls.append((i, n, name)))
 
         assert len(calls) >= 1
@@ -116,7 +116,7 @@ class TestSummariseComponent:
         comp = make_component(tmp_path)
         comp.files = [c_file]
 
-        llm = LocalLLM()
+        llm = LocalLLM("ollama/codellama")
         llm.summarise_component(comp)
 
         if comp.function_summaries:
@@ -134,11 +134,11 @@ class TestIsAvailable:
     def test_available_when_endpoint_reachable(self, mock_urlopen):
         mock_urlopen.return_value.__enter__ = lambda s: s
         mock_urlopen.return_value.__exit__ = MagicMock(return_value=False)
-        llm = LocalLLM()
+        llm = LocalLLM("ollama/codellama")
         assert llm.is_available() is True
 
     @patch("llm.local_llm.urllib.request.urlopen")
     def test_not_available_on_error(self, mock_urlopen):
         mock_urlopen.side_effect = OSError("refused")
-        llm = LocalLLM()
+        llm = LocalLLM("ollama/codellama")
         assert llm.is_available() is False
