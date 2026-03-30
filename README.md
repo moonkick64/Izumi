@@ -73,17 +73,4 @@ Analysis results are saved to `~/.izumi/results/<project>/llm_results.json` and 
 
 Any provider supported by [LiteLLM](https://docs.litellm.ai/docs/providers) can be used as the external LLM (Claude, GPT-4, Gemini, DeepSeek, etc.).
 
----
-
-## Development
-
-```bash
-# Run tests
-uv run pytest
-
-# Run with coverage
-uv run pytest --cov
-```
-
-See [docs/architecture.md](docs/architecture.md) for detailed design and specification.
 
