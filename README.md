@@ -6,7 +6,13 @@ Targeted at projects without package managers — such as embedded development �
 
 LLM responses are treated as hints, not conclusions — the tool is designed to support the user's judgment.
 
-![screenshot](docs/images/screenshot.png)
+## Screenshots
+
+### Source Code Analysis
+<img width="1920" height="1032" alt="screenshot" src="https://github.com/user-attachments/assets/374c0528-19ac-4900-b93f-6b1bcd018788" />
+
+### LLM Scan Results
+<img width="1920" height="1032" alt="screenshot2" src="https://github.com/user-attachments/assets/41428283-d3ff-40c1-af5c-374510830a80" />
 
 ---
 
