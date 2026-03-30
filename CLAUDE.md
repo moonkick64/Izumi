@@ -159,7 +159,8 @@ uv run python main.py
 ## 静的解析の補足
 
 - `analyzer/copyright.py` の `CopyrightInfo` には `license_candidates: list[str]` フィールドがある。SPDX タグを持たないファイルのヘッダから `"Licensed under"` 等のパターンで抽出した自由記述テキストを保存する
-- スキャン画面で INFERRED ファイルを選択すると「ライセンスを確定」パネルが表示される。ユーザーが SPDX 識別子を入力して確定すると `classification_confirmed` シグナル経由で分類が CONFIRMED に昇格し、コンポーネントが再構築される
+- スキャン画面でファイルを選択すると「分類の変更」パネルが常に表示される。分類は CONFIRMED / INFERRED / UNKNOWN の間で自由に変更可能。`classification_changed` シグナル経由で main_window が分類を更新し、コンポーネントを再構築する
+- ライセンスフィールドは既存の `spdx_license_id` を優先し、なければ `guess_spdx_id()` で `license_candidates` の先頭テキストから SPDX ID を推定して事前入力する
 - スキャン結果（分類・コンポーネント）はメモリ上のみに保持される。`~/.izumi/results/` に保存されるのは LLM 解析結果（`llm_results.json`）のみ
 
 ---
