@@ -129,9 +129,10 @@
   "model_not_set_title": "モデル未設定",
   "local_model_not_set_msg": "ローカルLLMのモデル名が設定されていません。\n設定画面で入力してください。",
   "external_model_not_set_msg": "外部LLMのモデル名が設定されていません。\n設定画面で入力してください。",
-  "inferred_confirm_group": "ライセンスを確定（INFERREDファイル）",
+  "classification_override_group": "分類の変更",
+  "classification_label": "分類:",
   "inferred_candidates_label": "検出されたライセンス表記:",
-  "inferred_no_license": "ライセンス表記が検出されませんでした。手動で入力してください。",
+  "inferred_no_license": "ライセンス表記が検出されませんでした。",
   "inferred_license_label": "ライセンス (SPDX):",
-  "mark_confirmed_btn": "CONFIRMED に変更"
+  "apply_classification_btn": "適用"
 }

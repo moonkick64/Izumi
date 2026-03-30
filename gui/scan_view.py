@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -22,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from analyzer.classifier import Classification, ClassificationResult, ClassifiedFile
+from analyzer.copyright import guess_spdx_id
 from analyzer.models import Component
 from i18n import t
 
@@ -42,9 +44,9 @@ _CLASS_FG: dict[Classification, str] = {
 class ScanView(QWidget):
     """Screen 2: VS Code-style file tree with source code viewer."""
 
-    review_requested        = Signal(list)    # list[Path] – selected files (empty = all)
-    export_requested        = Signal(list)    # list[Component] – all
-    classification_confirmed = Signal(object, str)  # Path, license_spdx_id
+    review_requested       = Signal(list)         # list[Path] – selected files (empty = all)
+    export_requested       = Signal(list)         # list[Component] – all
+    classification_changed = Signal(object, str, str)  # Path, Classification.value, license_spdx_id
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -136,23 +138,31 @@ class ScanView(QWidget):
         self._source_view.setPlaceholderText(t("source_placeholder"))
         right_layout.addWidget(self._source_view)
 
-        # INFERRED license confirmation panel
-        self._confirm_group = QGroupBox(t("inferred_confirm_group"))
-        confirm_layout = QVBoxLayout(self._confirm_group)
+        # Classification override panel (shown for every file)
+        self._override_group = QGroupBox(t("classification_override_group"))
+        override_layout = QVBoxLayout(self._override_group)
         self._candidates_label = QLabel("")
         self._candidates_label.setWordWrap(True)
         self._candidates_label.setFont(QFont("monospace", 9))
-        confirm_layout.addWidget(self._candidates_label)
-        confirm_fields = QHBoxLayout()
-        confirm_fields.addWidget(QLabel(t("inferred_license_label")))
+        override_layout.addWidget(self._candidates_label)
+        override_fields = QHBoxLayout()
+        override_fields.addWidget(QLabel(t("classification_label")))
+        self._class_combo = QComboBox()
+        self._class_combo.addItems([
+            Classification.CONFIRMED.value,
+            Classification.INFERRED.value,
+            Classification.UNKNOWN.value,
+        ])
+        override_fields.addWidget(self._class_combo)
+        override_fields.addWidget(QLabel(t("inferred_license_label")))
         self._confirm_license_edit = QLineEdit()
-        confirm_fields.addWidget(self._confirm_license_edit, 1)
-        self._mark_confirmed_btn = QPushButton(t("mark_confirmed_btn"))
-        self._mark_confirmed_btn.clicked.connect(self._on_mark_confirmed_clicked)
-        confirm_fields.addWidget(self._mark_confirmed_btn)
-        confirm_layout.addLayout(confirm_fields)
-        right_layout.addWidget(self._confirm_group)
-        self._confirm_group.setVisible(False)
+        override_fields.addWidget(self._confirm_license_edit, 1)
+        apply_btn = QPushButton(t("apply_classification_btn"))
+        apply_btn.clicked.connect(self._on_apply_classification_clicked)
+        override_fields.addWidget(apply_btn)
+        override_layout.addLayout(override_fields)
+        right_layout.addWidget(self._override_group)
+        self._override_group.setVisible(False)
 
         splitter.addWidget(right)
         splitter.setSizes([280, 820])
@@ -252,7 +262,7 @@ class ScanView(QWidget):
             self._file_info_label.setText("")
             self._file_info_label.setStyleSheet("")
             self._source_view.clear()
-            self._confirm_group.setVisible(False)
+            self._override_group.setVisible(False)
             return
 
         cf = self._item_to_file[current]
@@ -270,29 +280,42 @@ class ScanView(QWidget):
             text = t("read_error", exc=exc)
         self._source_view.setPlainText(text)
 
-        if cf.classification == Classification.INFERRED:
-            candidates = cf.file_info.copyright_info.license_candidates
-            if candidates:
-                lines = t("inferred_candidates_label") + "\n" + "\n".join(
-                    f"  \u2022 {c}" for c in candidates[:5]
-                )
-                self._candidates_label.setText(lines)
-                self._confirm_license_edit.setPlaceholderText(candidates[0][:60])
-            else:
-                self._candidates_label.setText(t("inferred_no_license"))
-                self._confirm_license_edit.setPlaceholderText("")
-            self._confirm_license_edit.clear()
-            self._confirm_group.setVisible(True)
-        else:
-            self._confirm_group.setVisible(False)
+        # Pre-select current classification
+        idx = self._class_combo.findText(cf.classification.value)
+        if idx >= 0:
+            self._class_combo.setCurrentIndex(idx)
 
-    def _on_mark_confirmed_clicked(self) -> None:
+        # Show detected license candidates
+        candidates = cf.file_info.copyright_info.license_candidates
+        if candidates:
+            lines = t("inferred_candidates_label") + "\n" + "\n".join(
+                f"  \u2022 {c}" for c in candidates[:3]
+            )
+            self._candidates_label.setText(lines)
+            self._candidates_label.setVisible(True)
+        else:
+            self._candidates_label.setVisible(False)
+
+        # Pre-fill license field: existing SPDX ID > guessed from candidates > empty
+        ci = cf.file_info.copyright_info
+        if ci.spdx_license_id:
+            self._confirm_license_edit.setText(ci.spdx_license_id)
+        elif candidates:
+            guessed = guess_spdx_id(candidates[0])
+            self._confirm_license_edit.setText(guessed if guessed else candidates[0][:60])
+        else:
+            self._confirm_license_edit.clear()
+
+        self._override_group.setVisible(True)
+
+    def _on_apply_classification_clicked(self) -> None:
         item = self._tree.currentItem()
         if item is None or item not in self._item_to_file:
             return
         cf = self._item_to_file[item]
+        new_class = self._class_combo.currentText()
         license_id = self._confirm_license_edit.text().strip()
-        self.classification_confirmed.emit(cf.file_info.path, license_id)
+        self.classification_changed.emit(cf.file_info.path, new_class, license_id)
 
     def _on_review_clicked(self) -> None:
         selected_paths: list[Path] = [

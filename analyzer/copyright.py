@@ -28,6 +28,28 @@ _LICENSE_MENTION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Ordered list of (pattern, SPDX-ID) used by guess_spdx_id()
+_SPDX_GUESS_TABLE: list[tuple[re.Pattern, str]] = [
+    (re.compile(r'LGPL[-\s]?v?2\.1', re.I),   'LGPL-2.1-only'),
+    (re.compile(r'LGPL[-\s]?v?3',    re.I),   'LGPL-3.0-only'),
+    (re.compile(r'\bLGPL\b',         re.I),   'LGPL-2.1-only'),
+    (re.compile(r'GPL[-\s]?v?3',     re.I),   'GPL-3.0-only'),
+    (re.compile(r'GPL[-\s]?v?2',     re.I),   'GPL-2.0-only'),
+    (re.compile(r'\bGPL\b',          re.I),   'GPL-2.0-only'),
+    (re.compile(r'Apache[-\s]?2',    re.I),   'Apache-2.0'),
+    (re.compile(r'\bApache\b',       re.I),   'Apache-2.0'),
+    (re.compile(r'\bMIT\b',          re.I),   'MIT'),
+    (re.compile(r'BSD[-\s]?3',       re.I),   'BSD-3-Clause'),
+    (re.compile(r'BSD[-\s]?2',       re.I),   'BSD-2-Clause'),
+    (re.compile(r'\bBSD\b',          re.I),   'BSD-3-Clause'),
+    (re.compile(r'\bISC\b',          re.I),   'ISC'),
+    (re.compile(r'MPL[-\s]?2',       re.I),   'MPL-2.0'),
+    (re.compile(r'\bMPL\b',          re.I),   'MPL-2.0'),
+    (re.compile(r'\bZlib\b',         re.I),   'Zlib'),
+    (re.compile(r'public\s+domain',  re.I),   'LicenseRef-PublicDomain'),
+    (re.compile(r'\bCC0\b',          re.I),   'CC0-1.0'),
+]
+
 # Only scan the first N lines of a file for header info
 _HEADER_MAX_LINES = 50
 
@@ -109,6 +131,18 @@ def extract_copyright_info(
                 info.license_candidates.append(candidate)
 
     return info
+
+
+def guess_spdx_id(text: str) -> str:
+    """Return a short SPDX identifier guessed from a free-text license mention.
+
+    Tries each entry in *_SPDX_GUESS_TABLE* in order and returns the first
+    match.  Returns an empty string when no known license name is recognised.
+    """
+    for pattern, spdx_id in _SPDX_GUESS_TABLE:
+        if pattern.search(text):
+            return spdx_id
+    return ""
 
 
 def _read_header(file_path: Path, max_lines: int) -> str:
