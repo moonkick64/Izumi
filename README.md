@@ -40,7 +40,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.bashrc
 
 # Clone and install dependencies
-git clone https://github.com/moonkick64/izumi
+git clone https://github.com/moonkick64/Izumi
 cd izumi
 uv sync
 ```

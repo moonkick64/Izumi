@@ -22,6 +22,12 @@ _COPYRIGHT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Free-text license mention pattern (e.g. "Licensed under the MIT License")
+_LICENSE_MENTION_RE = re.compile(
+    r'[^\n]{0,40}(?:licen[sc]e(?:d\s+under)?|under\s+the\s+terms\s+of|released\s+under)[^\n]{0,100}',
+    re.IGNORECASE,
+)
+
 # Only scan the first N lines of a file for header info
 _HEADER_MAX_LINES = 50
 
@@ -38,6 +44,9 @@ class CopyrightInfo:
 
     spdx_copyright_texts: list[str] = field(default_factory=list)
     """SPDX-FileCopyrightText values"""
+
+    license_candidates: list[str] = field(default_factory=list)
+    """Free-text license mentions found in the header (e.g. 'Licensed under the MIT License')."""
 
     @property
     def has_license(self) -> bool:
@@ -90,6 +99,14 @@ def extract_copyright_info(
         text = re.sub(r'[\s\*/]+$', '', text)
         if text not in info.copyright_texts:
             info.copyright_texts.append(text)
+
+    # Free-text license mentions (only when no SPDX tag present)
+    if not info.spdx_license_id:
+        for match in _LICENSE_MENTION_RE.finditer(content):
+            candidate = re.sub(r'[\s\*/]+$', '', match.group(0).strip())
+            # Skip lines that are just "all rights reserved" noise
+            if candidate and candidate not in info.license_candidates:
+                info.license_candidates.append(candidate)
 
     return info
 

@@ -19,11 +19,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from analyzer.classifier import classify
+from analyzer.classifier import classify, Classification, ClassificationResult
 from analyzer.grouper import group_into_components
 from analyzer.models import Component
 from analyzer.scanner import scan_tree, ScanResult
-from analyzer.classifier import ClassificationResult
 from gui.scan_view import ScanView
 from gui.review_view import ReviewView
 from gui.sbom_view import SbomView
@@ -116,6 +115,7 @@ class MainWindow(QMainWindow):
         self._settings_view.settings_changed.connect(self._on_settings_changed)
         self._scan_view.review_requested.connect(self._on_review_requested)
         self._scan_view.export_requested.connect(self._on_export_requested)
+        self._scan_view.classification_confirmed.connect(self._on_classification_confirmed)
         self._review_view.back_requested.connect(lambda: self._show_page(_PAGE_SCAN))
         self._review_view.export_requested.connect(self._on_export_requested)
         self._sbom_view.back_requested.connect(lambda: self._show_page(_PAGE_SCAN))
@@ -219,6 +219,25 @@ class MainWindow(QMainWindow):
                 preselected_paths=selected_paths or None,
             )
         self._show_page(_PAGE_REVIEW)
+
+    # ── Classification confirmation flow ──────────────────────────────────
+
+    @Slot(object, str)
+    def _on_classification_confirmed(self, file_path: Path, license_id: str) -> None:
+        """User confirmed an INFERRED file's license — promote it to CONFIRMED."""
+        if self._classification is None:
+            return
+        for cf in self._classification.inferred:
+            if cf.file_info.path == file_path:
+                cf.classification = Classification.CONFIRMED
+                cf.reason = f"User confirmed: {license_id}" if license_id else "User confirmed"
+                if license_id:
+                    cf.file_info.copyright_info.spdx_license_id = license_id
+                self._classification.inferred.remove(cf)
+                self._classification.confirmed.append(cf)
+                break
+        self._components = group_into_components(self._classification, self._source_dir)
+        self._scan_view.set_data(self._classification, self._components, self._source_dir)
 
     # ── Export flow ───────────────────────────────────────────────────────
 

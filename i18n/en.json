@@ -37,8 +37,8 @@
   "function_list_label": "Function List",
   "analyse_btn": "Analyse",
   "delete_results_btn": "Delete Results",
-  "function_body_group": "Function Source Code",
-  "function_body_placeholder": "Select a function to view its source code here.",
+  "function_body_group": "Source File (function highlighted)",
+  "function_body_placeholder": "Select a function to view the source file here.",
   "opt2_panel_title": "Summary (editable – review before sending to external LLM)",
   "opt2_summary_placeholder": "Press \"Analyse\" to generate a summary with local LLM. Edit here to remove confidential information before sending.",
   "approve_checkbox": "Approve for sending to external LLM",
@@ -128,5 +128,10 @@
   "parse_error_msg": "LLM response format was invalid. Please re-run the analysis.",
   "model_not_set_title": "Model Not Configured",
   "local_model_not_set_msg": "Local LLM model name is not set.\nPlease enter it in Settings.",
-  "external_model_not_set_msg": "External LLM model name is not set.\nPlease enter it in Settings."
+  "external_model_not_set_msg": "External LLM model name is not set.\nPlease enter it in Settings.",
+  "inferred_confirm_group": "Confirm License (INFERRED file)",
+  "inferred_candidates_label": "Detected license mentions:",
+  "inferred_no_license": "No license mentions detected — enter license manually.",
+  "inferred_license_label": "License (SPDX):",
+  "mark_confirmed_btn": "Mark as CONFIRMED"
 }

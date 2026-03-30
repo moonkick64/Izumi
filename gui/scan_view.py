@@ -8,8 +8,10 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPlainTextEdit,
     QPushButton,
     QSplitter,
@@ -40,8 +42,9 @@ _CLASS_FG: dict[Classification, str] = {
 class ScanView(QWidget):
     """Screen 2: VS Code-style file tree with source code viewer."""
 
-    review_requested = Signal(list)    # list[Path] – selected files (empty = all)
-    export_requested = Signal(list)   # list[Component] – all
+    review_requested        = Signal(list)    # list[Path] – selected files (empty = all)
+    export_requested        = Signal(list)    # list[Component] – all
+    classification_confirmed = Signal(object, str)  # Path, license_spdx_id
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -132,6 +135,24 @@ class ScanView(QWidget):
         self._source_view.setFont(QFont("monospace", 10))
         self._source_view.setPlaceholderText(t("source_placeholder"))
         right_layout.addWidget(self._source_view)
+
+        # INFERRED license confirmation panel
+        self._confirm_group = QGroupBox(t("inferred_confirm_group"))
+        confirm_layout = QVBoxLayout(self._confirm_group)
+        self._candidates_label = QLabel("")
+        self._candidates_label.setWordWrap(True)
+        self._candidates_label.setFont(QFont("monospace", 9))
+        confirm_layout.addWidget(self._candidates_label)
+        confirm_fields = QHBoxLayout()
+        confirm_fields.addWidget(QLabel(t("inferred_license_label")))
+        self._confirm_license_edit = QLineEdit()
+        confirm_fields.addWidget(self._confirm_license_edit, 1)
+        self._mark_confirmed_btn = QPushButton(t("mark_confirmed_btn"))
+        self._mark_confirmed_btn.clicked.connect(self._on_mark_confirmed_clicked)
+        confirm_fields.addWidget(self._mark_confirmed_btn)
+        confirm_layout.addLayout(confirm_fields)
+        right_layout.addWidget(self._confirm_group)
+        self._confirm_group.setVisible(False)
 
         splitter.addWidget(right)
         splitter.setSizes([280, 820])
@@ -231,6 +252,7 @@ class ScanView(QWidget):
             self._file_info_label.setText("")
             self._file_info_label.setStyleSheet("")
             self._source_view.clear()
+            self._confirm_group.setVisible(False)
             return
 
         cf = self._item_to_file[current]
@@ -247,6 +269,30 @@ class ScanView(QWidget):
         except OSError as exc:
             text = t("read_error", exc=exc)
         self._source_view.setPlainText(text)
+
+        if cf.classification == Classification.INFERRED:
+            candidates = cf.file_info.copyright_info.license_candidates
+            if candidates:
+                lines = t("inferred_candidates_label") + "\n" + "\n".join(
+                    f"  \u2022 {c}" for c in candidates[:5]
+                )
+                self._candidates_label.setText(lines)
+                self._confirm_license_edit.setPlaceholderText(candidates[0][:60])
+            else:
+                self._candidates_label.setText(t("inferred_no_license"))
+                self._confirm_license_edit.setPlaceholderText("")
+            self._confirm_license_edit.clear()
+            self._confirm_group.setVisible(True)
+        else:
+            self._confirm_group.setVisible(False)
+
+    def _on_mark_confirmed_clicked(self) -> None:
+        item = self._tree.currentItem()
+        if item is None or item not in self._item_to_file:
+            return
+        cf = self._item_to_file[item]
+        license_id = self._confirm_license_edit.text().strip()
+        self.classification_confirmed.emit(cf.file_info.path, license_id)
 
     def _on_review_clicked(self) -> None:
         selected_paths: list[Path] = [

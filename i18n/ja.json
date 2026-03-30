@@ -37,8 +37,8 @@
   "function_list_label": "関数一覧",
   "analyse_btn": "解析",
   "delete_results_btn": "結果を削除",
-  "function_body_group": "関数ソースコード",
-  "function_body_placeholder": "関数を選択するとここにソースコードが表示されます。",
+  "function_body_group": "ソースファイル（対象関数をハイライト表示）",
+  "function_body_placeholder": "関数を選択するとここにソースファイルが表示されます。",
   "opt2_panel_title": "要約（編集可能・外部LLMへの送信前に確認してください）",
   "opt2_summary_placeholder": "「解析」を押すとローカルLLMが要約を生成します。機密情報が含まれる場合はここで編集してから送信してください。",
   "approve_checkbox": "外部LLMへの送信を承認",
@@ -128,5 +128,10 @@
   "parse_error_msg": "LLMの応答フォーマットが不正でした。再度解析を実行してください。",
   "model_not_set_title": "モデル未設定",
   "local_model_not_set_msg": "ローカルLLMのモデル名が設定されていません。\n設定画面で入力してください。",
-  "external_model_not_set_msg": "外部LLMのモデル名が設定されていません。\n設定画面で入力してください。"
+  "external_model_not_set_msg": "外部LLMのモデル名が設定されていません。\n設定画面で入力してください。",
+  "inferred_confirm_group": "ライセンスを確定（INFERREDファイル）",
+  "inferred_candidates_label": "検出されたライセンス表記:",
+  "inferred_no_license": "ライセンス表記が検出されませんでした。手動で入力してください。",
+  "inferred_license_label": "ライセンス (SPDX):",
+  "mark_confirmed_btn": "CONFIRMED に変更"
 }

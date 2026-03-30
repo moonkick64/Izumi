@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
 
 from analyzer.classifier import Classification, ClassificationResult, ClassifiedFile
 from analyzer.models import Component
@@ -541,6 +541,7 @@ class ReviewView(QWidget):
         if row < 0 or row >= len(self._extracted_functions):
             self._current_fn = None
             self._body_view.clear()
+            self._body_view.setExtraSelections([])
             self._hint_edit.clear()
             self._summary_edit.clear()
             self._comp_edit.clear()
@@ -548,7 +549,12 @@ class ReviewView(QWidget):
             return
 
         fn = self._current_fn = self._extracted_functions[row]
-        self._body_view.setPlainText(fn.body.lstrip('\n'))
+        try:
+            full_text = fn.file_path.read_text(errors="replace")
+        except OSError:
+            full_text = fn.body
+        self._body_view.setPlainText(full_text)
+        self._highlight_function_lines(fn.start_line, fn.end_line)
 
         key = _fn_key(fn)
         self._hint_edit.setPlainText(self._hint_text_for(key))
@@ -562,6 +568,34 @@ class ReviewView(QWidget):
             comp, lic = "", ""
         self._comp_edit.setText(comp)
         self._lic_edit.setText(lic)
+
+    def _highlight_function_lines(self, start_line: int, end_line: int) -> None:
+        """Highlight lines *start_line* through *end_line* (1-indexed) in the body view."""
+        doc = self._body_view.document()
+        fmt = QTextCharFormat()
+        fmt.setBackground(QColor("#ffffaa"))
+
+        selections = []
+        for line_no in range(start_line - 1, end_line):
+            block = doc.findBlockByLineNumber(line_no)
+            if not block.isValid():
+                break
+            cursor = QTextCursor(block)
+            cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
+            sel = QTextEdit.ExtraSelection()
+            sel.cursor = cursor
+            sel.format = fmt
+            selections.append(sel)
+
+        self._body_view.setExtraSelections(selections)
+
+        # Scroll to the function start
+        if start_line >= 1:
+            block = doc.findBlockByLineNumber(start_line - 1)
+            if block.isValid():
+                cursor = QTextCursor(block)
+                self._body_view.setTextCursor(cursor)
+                self._body_view.ensureCursorVisible()
 
     # ── Option 2: save edited summary ─────────────────────────────────────────
 
@@ -772,11 +806,16 @@ class ReviewView(QWidget):
         self.export_requested.emit(self._components)
 
     def _apply_matches_to_components(self) -> None:
-        """Update component name/license based on user match decisions."""
+        """Rebuild component list based on user match decisions.
+
+        Matched files are split out of their original components into new
+        per-decision components so that one function match does not silently
+        alter every other file that shared a LICENSE directory.
+        """
         if not self._fn_matches:
             return
 
-        # Build file_path → (component_name, license) from all matched functions
+        # Build file_path → (component_name, license) from matched functions
         file_matches: dict[Path, tuple[str, str]] = {}
         for fn in self._extracted_functions:
             key = _fn_key(fn)
@@ -788,16 +827,44 @@ class ReviewView(QWidget):
         if not file_matches:
             return
 
+        matched_paths = set(file_matches.keys())
+
+        # Record original component for each file before we mutate anything
+        original_comp: dict[Path, Component] = {}
         for comp in self._components:
-            for file_path in comp.files:
-                match = file_matches.get(file_path.resolve())
-                if match:
-                    comp_name, lic = match
-                    if comp_name:
-                        comp.name = comp_name
-                    if lic:
-                        comp.license_expression = lic
-                    break  # first matched function in this component wins
+            for f in comp.files:
+                original_comp[f.resolve()] = comp
+
+        # Keep original components but remove matched files from them
+        surviving: list[Component] = []
+        for comp in self._components:
+            remaining = [f for f in comp.files if f.resolve() not in matched_paths]
+            if remaining:
+                comp.files = remaining
+                surviving.append(comp)
+
+        # Group matched files by their (comp_name, license) decision
+        decision_groups: dict[tuple[str, str], list[Path]] = {}
+        for fp, decision in file_matches.items():
+            decision_groups.setdefault(decision, []).append(fp)
+
+        prio = [Classification.CONFIRMED, Classification.INFERRED, Classification.UNKNOWN]
+        for (comp_name, lic), file_paths in decision_groups.items():
+            classes = {
+                original_comp[fp].classification
+                for fp in file_paths
+                if fp in original_comp
+            }
+            main_class = next((c for c in prio if c in classes), Classification.UNKNOWN)
+            surviving.append(Component(
+                name=comp_name or "unknown",
+                directory=file_paths[0].parent,
+                files=file_paths,
+                classification=main_class,
+                license_expression=lic or None,
+            ))
+
+        self._components = surviving
 
     # ── Shared helpers ─────────────────────────────────────────────────────────
 
