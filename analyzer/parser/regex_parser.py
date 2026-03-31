@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """Regex-based fallback C/C++ function extractor.
 
 This parser is intentionally simple: it finds function definitions using

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """SBOM export view – format selection and file output."""
 
 from __future__ import annotations

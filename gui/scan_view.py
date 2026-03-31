@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """Scan results view – VS Code-style file tree + source code viewer."""
 
 from __future__ import annotations

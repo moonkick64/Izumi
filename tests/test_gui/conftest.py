@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """pytest-qt GUI test configuration.
 
 Sets the Qt platform to offscreen so tests run without a display.

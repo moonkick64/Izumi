@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """Tests for gui.scan_view."""
 
 import os

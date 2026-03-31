@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """Source tree scanner: walk directory tree and collect file metadata."""
 
 from collections.abc import Callable

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """CycloneDX 1.5 BOM writer.
 
 Converts a list of :class:`~analyzer.models.Component` objects into a

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """Prompt templates for local and external LLM calls.
 
 Prompt strings are stored in i18n/en.json and i18n/ja.json under keys prefixed

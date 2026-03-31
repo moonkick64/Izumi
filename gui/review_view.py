@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """LLM SCA review view – function-level analysis with 3 LLM options.
 
 All three options operate on C/C++ functions extracted from source files:

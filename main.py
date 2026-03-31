@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """Izumi – OSS detection and SBOM assistance tool.
 
 CLI entry point (GUI-free mode for development and CI use).

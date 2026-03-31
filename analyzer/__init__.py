@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """Static analysis engine for OSS detection in C/C++ source trees."""
 
 from .copyright import CopyrightInfo, extract_copyright_info

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """C/C++ function extractors (libclang with regex fallback)."""
 
 from .regex_parser import extract_functions_regex, FunctionInfo

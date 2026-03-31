@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """Settings view – source directory selection and LLM configuration."""
 
 from __future__ import annotations

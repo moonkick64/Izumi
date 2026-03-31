@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """libclang-based C/C++ function extractor.
 
 Uses the Python ``clang`` bindings (libclang) for accurate AST-based

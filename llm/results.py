@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """Persistence layer for LLM analysis results.
 
 Results are stored in ~/.izumi/results/<project_name>_<hash>/llm_results.json.

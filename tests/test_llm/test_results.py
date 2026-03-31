@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-FileCopyrightText: 2026 zkojii
 """Tests for llm.results.LLMResultsStore."""
 
 from pathlib import Path
