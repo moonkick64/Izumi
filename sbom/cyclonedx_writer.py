@@ -22,6 +22,8 @@ def write_cyclonedx(
     components: list[Component],
     output_path: Path,
     output_format: str = "json",
+    project_name: str = "",
+    project_version: str = "",
 ) -> None:
     """Write *components* as a CycloneDX 1.5 BOM to *output_path*.
 
@@ -42,9 +44,26 @@ def write_cyclonedx(
 
     bom = Bom()
 
+    # Set main project as the subject of this BOM
+    main_comp = None
+    if project_name:
+        main_comp = CdxComponent(
+            type=ComponentType.APPLICATION,
+            name=project_name,
+            **({"version": project_version} if project_version else {}),
+        )
+        bom.metadata.component = main_comp
+
     for comp in components:
         cdx_comp = _build_cdx_component(comp, CdxComponent, ComponentType)
         bom.components.add(cdx_comp)
+
+    # Register dependency relationships (main project → OSS components)
+    if main_comp is not None:
+        try:
+            bom.register_dependency(main_comp, list(bom.components))
+        except Exception:
+            pass
 
     fmt = OutputFormat.JSON if output_format.lower() == "json" else OutputFormat.XML
     outputter = make_outputter(

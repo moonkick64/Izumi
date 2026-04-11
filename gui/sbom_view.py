@@ -77,6 +77,19 @@ class SbomView(QWidget):
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         root.addWidget(self._table)
 
+        # Project information
+        proj_group = QGroupBox(t("project_info_group"))
+        proj_layout = QHBoxLayout(proj_group)
+        proj_layout.addWidget(QLabel(t("project_name_label")))
+        self._proj_name_edit = QLineEdit()
+        self._proj_name_edit.setPlaceholderText(t("project_name_placeholder"))
+        proj_layout.addWidget(self._proj_name_edit, 3)
+        proj_layout.addWidget(QLabel(t("project_version_label")))
+        self._proj_version_edit = QLineEdit()
+        self._proj_version_edit.setPlaceholderText(t("project_version_placeholder"))
+        proj_layout.addWidget(self._proj_version_edit, 1)
+        root.addWidget(proj_group)
+
         # Output options
         opt_group = QGroupBox(t("output_settings_group"))
         opt_layout = QVBoxLayout(opt_group)
@@ -181,14 +194,23 @@ class SbomView(QWidget):
         out_path = self._ensure_extension(out_path, fmt)
         self._out_edit.setText(str(out_path))
 
+        proj_name    = self._proj_name_edit.text().strip()
+        proj_version = self._proj_version_edit.text().strip()
+
         try:
             if fmt.startswith("spdx"):
                 from sbom.spdx_writer import write_spdx
-                write_spdx(self._components, out_path)
+                write_spdx(
+                    self._components, out_path,
+                    project_name=proj_name, project_version=proj_version,
+                )
             else:
                 from sbom.cyclonedx_writer import write_cyclonedx
                 output_format = "xml" if fmt == "cdx_xml" else "json"
-                write_cyclonedx(self._components, out_path, output_format=output_format)
+                write_cyclonedx(
+                    self._components, out_path, output_format=output_format,
+                    project_name=proj_name, project_version=proj_version,
+                )
 
             QMessageBox.information(
                 self, t("export_complete_title"), t("export_complete_msg", out_path=out_path)

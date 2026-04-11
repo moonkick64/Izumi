@@ -126,3 +126,32 @@ class TestWriteSpdx:
         write_spdx([comp], out, document_name="MyProject-SBOM")
         content = out.read_text()
         assert "MyProject-SBOM" in content
+
+    def test_project_name_creates_main_package(self, tmp_path):
+        comp = confirmed_component(tmp_path)
+        out = tmp_path / "sbom.spdx"
+        write_spdx([comp], out, project_name="my-firmware")
+        content = out.read_text()
+        assert "my-firmware" in content
+
+    def test_project_package_contains_components(self, tmp_path):
+        comp = confirmed_component(tmp_path)
+        out = tmp_path / "sbom.spdx"
+        write_spdx([comp], out, project_name="my-firmware")
+        content = out.read_text()
+        # Main project uses CONTAINS instead of DESCRIBES for OSS components
+        assert "CONTAINS" in content
+
+    def test_project_version_in_output(self, tmp_path):
+        comp = confirmed_component(tmp_path)
+        out = tmp_path / "sbom.spdx"
+        write_spdx([comp], out, project_name="my-firmware", project_version="2.0.0")
+        content = out.read_text()
+        assert "2.0.0" in content
+
+    def test_no_project_name_uses_describes(self, tmp_path):
+        comp = confirmed_component(tmp_path)
+        out = tmp_path / "sbom.spdx"
+        write_spdx([comp], out)
+        content = out.read_text()
+        assert "DESCRIBES" in content

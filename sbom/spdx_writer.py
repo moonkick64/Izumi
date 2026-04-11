@@ -28,6 +28,8 @@ def write_spdx(
     output_path: Path,
     document_name: str = "Izumi-SBOM",
     validate: bool = True,
+    project_name: str = "",
+    project_version: str = "",
 ) -> None:
     """Write *components* as an SPDX 2.3 document to *output_path*.
 
@@ -70,6 +72,25 @@ def write_spdx(
     packages: list[Package] = []
     relationships: list[Relationship] = []
 
+    # Main project package (when project_name is provided)
+    main_spdx_id: str | None = None
+    if project_name:
+        main_spdx_id = f"SPDXRef-{_spdx_safe_id(project_name)}"
+        main_pkg = Package(
+            spdx_id=main_spdx_id,
+            name=project_name,
+            version=project_version or "",
+            download_location=SpdxNoAssertion(),
+            license_concluded=SpdxNoAssertion(),
+            license_declared=SpdxNoAssertion(),
+            copyright_text=SpdxNoAssertion(),
+            files_analyzed=False,
+        )
+        packages.append(main_pkg)
+        relationships.append(
+            Relationship("SPDXRef-DOCUMENT", RelationshipType.DESCRIBES, main_spdx_id)
+        )
+
     for comp in components:
         spdx_id = f"SPDXRef-{_spdx_safe_id(comp.name)}"
 
@@ -94,9 +115,14 @@ def write_spdx(
             comment=_build_comment(comp),
         )
         packages.append(pkg)
-        relationships.append(
-            Relationship("SPDXRef-DOCUMENT", RelationshipType.DESCRIBES, spdx_id)
-        )
+        if main_spdx_id:
+            relationships.append(
+                Relationship(main_spdx_id, RelationshipType.CONTAINS, spdx_id)
+            )
+        else:
+            relationships.append(
+                Relationship("SPDXRef-DOCUMENT", RelationshipType.DESCRIBES, spdx_id)
+            )
 
     # SPDX validation fails on empty documents; disable it in that case
     should_validate = validate and len(packages) > 0

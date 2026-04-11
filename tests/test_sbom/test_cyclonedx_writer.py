@@ -123,3 +123,29 @@ class TestWriteCyclonedx:
         comps = data.get("components", [])
         props = {p["name"]: p["value"] for p in comps[0].get("properties", [])}
         assert "Possibly zlib" in props.get("izumi:oss_hint", "")
+
+    def test_project_name_in_metadata(self, tmp_path):
+        comp = make_component("zlib", tmp_path)
+        out = tmp_path / "bom.json"
+        write_cyclonedx([comp], out, output_format="json", project_name="my-firmware")
+        data = json.loads(out.read_text())
+        metadata_comp = data.get("metadata", {}).get("component", {})
+        assert metadata_comp.get("name") == "my-firmware"
+
+    def test_project_version_in_metadata(self, tmp_path):
+        comp = make_component("zlib", tmp_path)
+        out = tmp_path / "bom.json"
+        write_cyclonedx(
+            [comp], out, output_format="json",
+            project_name="my-firmware", project_version="1.2.3",
+        )
+        data = json.loads(out.read_text())
+        metadata_comp = data.get("metadata", {}).get("component", {})
+        assert metadata_comp.get("version") == "1.2.3"
+
+    def test_no_project_name_no_metadata_component(self, tmp_path):
+        comp = make_component("zlib", tmp_path)
+        out = tmp_path / "bom.json"
+        write_cyclonedx([comp], out, output_format="json")
+        data = json.loads(out.read_text())
+        assert "component" not in data.get("metadata", {})
