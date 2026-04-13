@@ -114,17 +114,18 @@ def _make_component(
         if ci.spdx_license_id:
             license_ids.add(ci.spdx_license_id)
         else:
-            # No SPDX tag in the source file; try to infer from the LICENSE file
+            # No SPDX tag in the source file; try to infer from the LICENSE file.
+            # If the license name is not recognisable, record NOASSERTION so the
+            # SBOM makes clear that a license file exists but could not be identified.
             lf = cf.file_info.license_file
             if lf and lf not in license_files_checked:
                 license_files_checked.add(lf)
                 try:
                     content = lf.read_text(errors='replace')
                     guessed = guess_spdx_id(content)
-                    if guessed:
-                        license_ids.add(guessed)
+                    license_ids.add(guessed if guessed else "NOASSERTION")
                 except OSError:
-                    pass
+                    license_ids.add("NOASSERTION")
         for c in ci.all_copyright_texts:
             if c not in seen_copyrights:
                 seen_copyrights.add(c)

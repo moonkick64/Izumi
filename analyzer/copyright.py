@@ -29,6 +29,9 @@ _LICENSE_MENTION_RE = re.compile(
 )
 
 # Ordered list of (pattern, SPDX-ID) used by guess_spdx_id()
+# Matches license *name* keywords only (e.g. "MIT License", "GPL v2").
+# Full license body text is not matched here – unrecognised texts should be
+# reported as NOASSERTION and routed to the LLM analysis phase.
 _SPDX_GUESS_TABLE: list[tuple[re.Pattern, str]] = [
     (re.compile(r'LGPL[-\s]?v?2\.1', re.I),   'LGPL-2.1-only'),
     (re.compile(r'LGPL[-\s]?v?3',    re.I),   'LGPL-3.0-only'),
