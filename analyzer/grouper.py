@@ -14,6 +14,7 @@ The component name is derived from the grouping directory's last path segment.
 from pathlib import Path
 
 from .classifier import Classification, ClassificationResult, ClassifiedFile
+from .copyright import guess_spdx_id
 from .models import Component
 from .scanner import FileInfo, THIRD_PARTY_DIR_NAMES
 
@@ -106,11 +107,24 @@ def _make_component(
     license_ids: set[str] = set()
     copyrights: list[str] = []
     seen_copyrights: set[str] = set()
+    license_files_checked: set[Path] = set()
 
     for cf in cfs:
         ci = cf.file_info.copyright_info
         if ci.spdx_license_id:
             license_ids.add(ci.spdx_license_id)
+        else:
+            # No SPDX tag in the source file; try to infer from the LICENSE file
+            lf = cf.file_info.license_file
+            if lf and lf not in license_files_checked:
+                license_files_checked.add(lf)
+                try:
+                    content = lf.read_text(errors='replace')
+                    guessed = guess_spdx_id(content)
+                    if guessed:
+                        license_ids.add(guessed)
+                except OSError:
+                    pass
         for c in ci.all_copyright_texts:
             if c not in seen_copyrights:
                 seen_copyrights.add(c)
