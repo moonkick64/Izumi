@@ -218,3 +218,108 @@ class TestScanView:
 
         assert len(received) == 1
         assert len(received[0]) == 3
+
+    # ── Bulk classification change ─────────────────────────────────────────
+
+    def _setup_two_file_view(self, qtbot, tmp_path):
+        """Create a ScanView with two distinct source files and return (view, file_items)."""
+        (tmp_path / "a.c").write_text("// a")
+        (tmp_path / "b.c").write_text("// b")
+
+        fi_a = make_file_info(tmp_path / "a.c")
+        fi_b = make_file_info(tmp_path / "b.c")
+
+        result = ClassificationResult()
+        result.unknown.append(ClassifiedFile(fi_a, Classification.UNKNOWN, "no info"))
+        result.unknown.append(ClassifiedFile(fi_b, Classification.UNKNOWN, "no info"))
+
+        view = ScanView()
+        qtbot.addWidget(view)
+        view.set_data(result, [], tmp_path)
+        return view
+
+    def test_single_apply_emits_list_of_one(self, qtbot, tmp_path):
+        """Apply with one file selected emits a list containing exactly one change."""
+        view = self._setup_two_file_view(qtbot, tmp_path)
+
+        dir_item = view._tree.topLevelItem(0)
+        file_item = dir_item.child(0)
+        view._tree.setCurrentItem(file_item)
+        view._confirm_license_edit.setText("MIT")
+
+        received: list[list] = []
+        view.classification_changed.connect(received.append)
+
+        with qtbot.waitSignal(view.classification_changed, timeout=1000):
+            view._on_apply_classification_clicked()
+
+        assert len(received) == 1
+        changes = received[0]
+        assert len(changes) == 1
+        path, cls_val, lic = changes[0]
+        assert isinstance(path, Path)
+        assert cls_val == Classification.UNKNOWN.value
+        assert lic == "MIT"
+
+    def test_multi_apply_emits_list_for_all_selected(self, qtbot, tmp_path):
+        """Apply with two files selected emits a list with two entries."""
+        view = self._setup_two_file_view(qtbot, tmp_path)
+
+        dir_item = view._tree.topLevelItem(0)
+        item_a = dir_item.child(0)
+        item_b = dir_item.child(1)
+        # setCurrentItem first (single-selects item_a), then add item_b to selection
+        view._tree.setCurrentItem(item_a)
+        item_b.setSelected(True)
+
+        view._class_combo.setCurrentText(Classification.CONFIRMED.value)
+        view._confirm_license_edit.setText("Zlib")
+
+        received: list[list] = []
+        view.classification_changed.connect(received.append)
+
+        with qtbot.waitSignal(view.classification_changed, timeout=1000):
+            view._on_apply_classification_clicked()
+
+        assert len(received) == 1
+        changes = received[0]
+        assert len(changes) == 2
+        for path, cls_val, lic in changes:
+            assert cls_val == Classification.CONFIRMED.value
+            assert lic == "Zlib"
+
+    def test_selection_count_label_hidden_for_single(self, qtbot, tmp_path):
+        """Selection count label is hidden when only one file is selected."""
+        view = self._setup_two_file_view(qtbot, tmp_path)
+
+        dir_item = view._tree.topLevelItem(0)
+        view._tree.setCurrentItem(dir_item.child(0))
+
+        # isHidden() checks the widget's own flag independently of parent visibility
+        assert view._selection_count_label.isHidden()
+
+    def test_selection_count_label_shown_for_multi(self, qtbot, tmp_path):
+        """Selection count label appears and apply button updates for multi-select."""
+        view = self._setup_two_file_view(qtbot, tmp_path)
+
+        dir_item = view._tree.topLevelItem(0)
+        # setCurrentItem first, then extend selection – avoids selection reset
+        view._tree.setCurrentItem(dir_item.child(0))
+        dir_item.child(1).setSelected(True)
+
+        assert not view._selection_count_label.isHidden()
+        assert "2" in view._selection_count_label.text()
+        assert "2" in view._apply_btn.text()
+
+    def test_apply_button_resets_after_single_select(self, qtbot, tmp_path):
+        """Apply button text reverts to default after going back to single selection."""
+        view = self._setup_two_file_view(qtbot, tmp_path)
+        default_text = view._apply_btn.text()
+
+        dir_item = view._tree.topLevelItem(0)
+        view._tree.setCurrentItem(dir_item.child(0))
+        dir_item.child(1).setSelected(True)
+        assert view._apply_btn.text() != default_text  # changed to multi label
+
+        view._tree.setCurrentItem(dir_item.child(0))  # single-selects, clears multi
+        assert view._apply_btn.text() == default_text  # reverted

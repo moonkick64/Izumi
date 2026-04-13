@@ -139,5 +139,7 @@
   "inferred_candidates_label": "Detected license mentions:",
   "inferred_no_license": "No license mentions detected.",
   "inferred_license_label": "License (SPDX):",
-  "apply_classification_btn": "Apply"
+  "apply_classification_btn": "Apply",
+  "apply_n_files_btn": "Apply to {count} files",
+  "selection_count": "{count} files selected"
 }

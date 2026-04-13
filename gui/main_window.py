@@ -224,38 +224,32 @@ class MainWindow(QMainWindow):
 
     # ── Classification confirmation flow ──────────────────────────────────
 
-    @Slot(object, str, str)
-    def _on_classification_changed(
-        self, file_path: Path, classification_value: str, license_id: str
-    ) -> None:
-        """User changed a file's classification (any direction)."""
+    @Slot(list)
+    def _on_classification_changed(self, changes: list) -> None:
+        """User changed classification for one or more files."""
         if self._classification is None:
             return
-        new_class = Classification(classification_value)
-        # Find the file across all three lists
-        target_cf = None
-        for cf in self._classification.all_files:
-            if cf.file_info.path == file_path:
-                target_cf = cf
-                break
-        if target_cf is None:
-            return
-        # Remove from current list
-        old_class = target_cf.classification
+
         _list_for = {
             Classification.CONFIRMED: self._classification.confirmed,
             Classification.INFERRED:  self._classification.inferred,
             Classification.UNKNOWN:   self._classification.unknown,
         }
-        _list_for[old_class].remove(target_cf)
-        # Apply changes
-        target_cf.classification = new_class
-        target_cf.reason = f"User override: {license_id}" if license_id else "User override"
-        if license_id:
-            target_cf.file_info.copyright_info.spdx_license_id = license_id
-        # Add to new list
-        _list_for[new_class].append(target_cf)
-        # Rebuild components and refresh view
+        path_to_cf = {cf.file_info.path: cf for cf in self._classification.all_files}
+
+        for file_path, classification_value, license_id in changes:
+            target_cf = path_to_cf.get(file_path)
+            if target_cf is None:
+                continue
+            new_class = Classification(classification_value)
+            _list_for[target_cf.classification].remove(target_cf)
+            target_cf.classification = new_class
+            target_cf.reason = f"User override: {license_id}" if license_id else "User override"
+            if license_id:
+                target_cf.file_info.copyright_info.spdx_license_id = license_id
+            _list_for[new_class].append(target_cf)
+
+        # Rebuild components and refresh view once for all changes
         self._components = group_into_components(self._classification, self._source_dir)
         self._scan_view.set_data(self._classification, self._components, self._source_dir)
 

@@ -46,9 +46,9 @@ _CLASS_FG: dict[Classification, str] = {
 class ScanView(QWidget):
     """Screen 2: VS Code-style file tree with source code viewer."""
 
-    review_requested       = Signal(list)         # list[Path] – selected files (empty = all)
-    export_requested       = Signal(list)         # list[Component] – all
-    classification_changed = Signal(object, str, str)  # Path, Classification.value, license_spdx_id
+    review_requested       = Signal(list)   # list[Path] – selected files (empty = all)
+    export_requested       = Signal(list)   # list[Component] – all
+    classification_changed = Signal(list)   # list[(Path, Classification.value, license_spdx_id)]
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -118,6 +118,7 @@ class ScanView(QWidget):
         self._tree.setColumnCount(1)
         self._tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._tree.currentItemChanged.connect(self._on_tree_item_changed)
+        self._tree.itemSelectionChanged.connect(self._on_selection_changed)
         left_layout.addWidget(self._tree)
 
         splitter.addWidget(left)
@@ -147,6 +148,10 @@ class ScanView(QWidget):
         self._candidates_label.setWordWrap(True)
         self._candidates_label.setFont(QFont("monospace", 9))
         override_layout.addWidget(self._candidates_label)
+        self._selection_count_label = QLabel("")
+        self._selection_count_label.setFont(QFont("monospace", 9))
+        self._selection_count_label.setVisible(False)
+        override_layout.addWidget(self._selection_count_label)
         override_fields = QHBoxLayout()
         override_fields.addWidget(QLabel(t("classification_label")))
         self._class_combo = QComboBox()
@@ -159,9 +164,9 @@ class ScanView(QWidget):
         override_fields.addWidget(QLabel(t("inferred_license_label")))
         self._confirm_license_edit = QLineEdit()
         override_fields.addWidget(self._confirm_license_edit, 1)
-        apply_btn = QPushButton(t("apply_classification_btn"))
-        apply_btn.clicked.connect(self._on_apply_classification_clicked)
-        override_fields.addWidget(apply_btn)
+        self._apply_btn = QPushButton(t("apply_classification_btn"))
+        self._apply_btn.clicked.connect(self._on_apply_classification_clicked)
+        override_fields.addWidget(self._apply_btn)
         override_layout.addLayout(override_fields)
         right_layout.addWidget(self._override_group)
         self._override_group.setVisible(False)
@@ -310,14 +315,34 @@ class ScanView(QWidget):
 
         self._override_group.setVisible(True)
 
+    def _on_selection_changed(self) -> None:
+        selected_file_items = [
+            item for item in self._tree.selectedItems()
+            if item in self._item_to_file
+        ]
+        count = len(selected_file_items)
+        if count <= 1:
+            self._selection_count_label.setVisible(False)
+            self._apply_btn.setText(t("apply_classification_btn"))
+        else:
+            self._selection_count_label.setText(t("selection_count", count=count))
+            self._selection_count_label.setVisible(True)
+            self._apply_btn.setText(t("apply_n_files_btn", count=count))
+
     def _on_apply_classification_clicked(self) -> None:
-        item = self._tree.currentItem()
-        if item is None or item not in self._item_to_file:
+        selected_file_items = [
+            item for item in self._tree.selectedItems()
+            if item in self._item_to_file
+        ]
+        if not selected_file_items:
             return
-        cf = self._item_to_file[item]
         new_class = self._class_combo.currentText()
         license_id = self._confirm_license_edit.text().strip()
-        self.classification_changed.emit(cf.file_info.path, new_class, license_id)
+        changes = [
+            (self._item_to_file[item].file_info.path, new_class, license_id)
+            for item in selected_file_items
+        ]
+        self.classification_changed.emit(changes)
 
     def _on_review_clicked(self) -> None:
         selected_paths: list[Path] = [

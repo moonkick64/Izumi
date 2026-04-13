@@ -139,5 +139,7 @@
   "inferred_candidates_label": "検出されたライセンス表記:",
   "inferred_no_license": "ライセンス表記が検出されませんでした。",
   "inferred_license_label": "ライセンス (SPDX):",
-  "apply_classification_btn": "適用"
+  "apply_classification_btn": "適用",
+  "apply_n_files_btn": "{count} 件に適用",
+  "selection_count": "{count} 件選択中"
 }
