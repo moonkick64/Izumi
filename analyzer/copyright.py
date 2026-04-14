@@ -28,19 +28,11 @@ _LICENSE_MENTION_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Ordered list of (pattern, SPDX-ID) used by guess_spdx_id()
-#
-# Phase 1 – license name keywords (e.g. "MIT License", "GPL v2").
-#   Checked first; most reliable.
-#
-# Phase 2 – distinctive body-text fingerprints for the handful of common
-#   licenses whose files contain only the license text with no name header
-#   (e.g. zlib, ISC, some MIT/BSD files).  These are stable, widely-used
-#   phrases that uniquely identify a single license family.  This is NOT
-#   an ad-hoc per-OSS list; it covers ~6 license texts that are standard.
-#   Anything not matched here is reported as NOASSERTION.
+# Ordered list of (pattern, SPDX-ID) used by guess_spdx_id().
+# Matches license *name* keywords only (e.g. "MIT License", "GPL v2").
+# License body-text matching is intentionally out of scope here; unrecognised
+# texts are reported as NOASSERTION and can be resolved in the LLM phase.
 _SPDX_GUESS_TABLE: list[tuple[re.Pattern, str]] = [
-    # Phase 1 – name / version keywords
     (re.compile(r'LGPL[-\s]?v?2\.1', re.I),   'LGPL-2.1-only'),
     (re.compile(r'LGPL[-\s]?v?3',    re.I),   'LGPL-3.0-only'),
     (re.compile(r'\bLGPL\b',         re.I),   'LGPL-2.1-only'),
@@ -59,26 +51,6 @@ _SPDX_GUESS_TABLE: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bZlib\b',         re.I),   'Zlib'),
     (re.compile(r'public\s+domain',  re.I),   'LicenseRef-PublicDomain'),
     (re.compile(r'\bCC0\b',          re.I),   'CC0-1.0'),
-    # Phase 2 – body-text fingerprints (for files with no license name)
-    (re.compile(                                                    # ISC
-        r'permission to use, copy, modify, and/or distribute this software',
-        re.I), 'ISC'),
-    (re.compile(                                                    # Zlib
-        r'permission is granted to anyone to use this software for any purpose',
-        re.I), 'Zlib'),
-    (re.compile(                                                    # MIT
-        r'permission is hereby granted, free of charge, to any person obtaining a copy',
-        re.I), 'MIT'),
-    (re.compile(                                                    # BSD-3-Clause
-        r'neither the name of\b.{0,200}\bnor the names of its contributors\b'
-        r'.{0,200}\bto endorse or promote products',
-        re.I | re.DOTALL), 'BSD-3-Clause'),
-    (re.compile(                                                    # BSD-2-Clause
-        r'redistribution and use in source and binary forms',
-        re.I), 'BSD-2-Clause'),
-    (re.compile(                                                    # Apache-2.0
-        r'http://www\.apache\.org/licenses/LICENSE-2\.0',
-        re.I), 'Apache-2.0'),
 ]
 
 # Only scan the first N lines of a file for header info
