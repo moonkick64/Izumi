@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
+from PySide6.QtGui import QBrush, QColor, QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
@@ -46,6 +47,8 @@ class SbomView(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._components: list[Component] = []
+        self._applied_proj_name: str = ""
+        self._applied_proj_version: str = ""
         self._build_ui()
 
     # ── Public API ────────────────────────────────────────────────────────
@@ -88,6 +91,9 @@ class SbomView(QWidget):
         self._proj_version_edit = QLineEdit()
         self._proj_version_edit.setPlaceholderText(t("project_version_placeholder"))
         proj_layout.addWidget(self._proj_version_edit, 1)
+        apply_proj_btn = QPushButton(t("apply_project_info_btn"))
+        apply_proj_btn.clicked.connect(self._on_apply_project_info)
+        proj_layout.addWidget(apply_proj_btn)
         root.addWidget(proj_group)
 
         # Output options
@@ -143,6 +149,13 @@ class SbomView(QWidget):
 
         root.addLayout(btn_row)
 
+    # ── Slots ────────────────────────────────────────────────────────────
+
+    def _on_apply_project_info(self) -> None:
+        self._applied_proj_name = self._proj_name_edit.text().strip()
+        self._applied_proj_version = self._proj_version_edit.text().strip()
+        self._refresh_table()
+
     # ── Helpers ───────────────────────────────────────────────────────────
 
     def _ensure_extension(self, path: Path, fmt: str) -> Path:
@@ -160,8 +173,23 @@ class SbomView(QWidget):
 
     def _refresh_table(self) -> None:
         self._table.setRowCount(len(self._components))
+
+        proj_bg = QBrush(QColor("#d0d0d0"))
+        proj_font = QFont()
+        proj_font.setBold(True)
+
         for row, comp in enumerate(self._components):
-            self._table.setItem(row, 0, QTableWidgetItem(comp.name))
+            # First component: show applied project name+version when set
+            if row == 0 and self._applied_proj_name:
+                name = self._applied_proj_name
+                if self._applied_proj_version:
+                    name = f"{name} {self._applied_proj_version}"
+                name_item = QTableWidgetItem(name)
+                name_item.setBackground(proj_bg)
+                name_item.setFont(proj_font)
+                self._table.setItem(row, 0, name_item)
+            else:
+                self._table.setItem(row, 0, QTableWidgetItem(comp.name))
             self._table.setItem(row, 1, QTableWidgetItem(comp.classification.value))
             self._table.setItem(row, 2, QTableWidgetItem(comp.license_expression or t("unknown_license")))
             self._table.setItem(row, 3, QTableWidgetItem(str(len(comp.files))))

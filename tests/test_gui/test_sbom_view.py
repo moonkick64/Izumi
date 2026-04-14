@@ -155,6 +155,66 @@ class TestSbomView:
         assert view._out_edit.text().endswith(".spdx")
         assert (tmp_path / "mybom.spdx").exists()
 
+    def test_no_project_name_shown_by_default(self, qtbot, tmp_path):
+        view = SbomView()
+        qtbot.addWidget(view)
+
+        comp = make_component("zlib", Classification.CONFIRMED, tmp_path)
+        view.set_components([comp])
+
+        # Without applying project info, row count unchanged and comp name shown
+        assert view._table.rowCount() == 1
+        assert view._table.item(0, 0).text() == "zlib"
+
+    def test_apply_project_info_updates_first_row_name(self, qtbot, tmp_path):
+        view = SbomView()
+        qtbot.addWidget(view)
+
+        comp = make_component("root-comp", Classification.CONFIRMED, tmp_path)
+        view.set_components([comp])
+
+        view._proj_name_edit.setText("my-firmware")
+        view._proj_version_edit.setText("1.0.0")
+        view._on_apply_project_info()
+
+        # Row count unchanged; first row name replaced with project name+version
+        assert view._table.rowCount() == 1
+        assert view._table.item(0, 0).text() == "my-firmware 1.0.0"
+        # Other columns keep original component data
+        assert view._table.item(0, 1).text() == "CONFIRMED"
+        assert view._table.item(0, 2).text() == "MIT"
+
+    def test_apply_project_info_restores_name_when_cleared(self, qtbot, tmp_path):
+        view = SbomView()
+        qtbot.addWidget(view)
+
+        comp = make_component("root-comp", Classification.CONFIRMED, tmp_path)
+        view.set_components([comp])
+
+        view._proj_name_edit.setText("my-firmware")
+        view._on_apply_project_info()
+        assert view._table.item(0, 0).text() == "my-firmware"
+
+        view._proj_name_edit.clear()
+        view._on_apply_project_info()
+        # Name reverts to original component name
+        assert view._table.item(0, 0).text() == "root-comp"
+
+    def test_apply_project_info_version_optional(self, qtbot, tmp_path):
+        view = SbomView()
+        qtbot.addWidget(view)
+
+        comp = make_component("root-comp", Classification.CONFIRMED, tmp_path)
+        view.set_components([comp])
+
+        view._proj_name_edit.setText("my-firmware")
+        view._on_apply_project_info()
+
+        # Name shown without version suffix when version field is empty
+        assert view._table.item(0, 0).text() == "my-firmware"
+        # Other columns unaffected
+        assert view._table.item(0, 1).text() == "CONFIRMED"
+
     @patch("gui.sbom_view.QMessageBox.information")
     def test_export_writes_cyclonedx_json(self, mock_info, qtbot, tmp_path):
         view = SbomView()
