@@ -92,8 +92,9 @@ def _build_cdx_component(
 
     cdx_comp = CdxComponent(**kwargs)
 
-    # Attach license
-    if comp.license_expression:
+    # Attach license (skip NOASSERTION – CycloneDX has no equivalent field value;
+    # omitting the license entry is the correct representation for unknown licenses)
+    if comp.license_expression and comp.license_expression.upper() != "NOASSERTION":
         try:
             lic = DisjunctiveLicense(id=comp.license_expression)
             cdx_comp.licenses.add(lic)

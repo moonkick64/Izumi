@@ -131,7 +131,17 @@ def _make_component(
                 seen_copyrights.add(c)
                 copyrights.append(c)
 
-    license_expr = " AND ".join(sorted(license_ids)) if license_ids else None
+    # Separate confirmed SPDX IDs from NOASSERTION.
+    # If any real license is identified in the component, use it exclusively –
+    # NOASSERTION from other files in the same component does not override it.
+    # Only fall back to NOASSERTION when no license could be identified at all.
+    real_ids = license_ids - {"NOASSERTION"}
+    if real_ids:
+        license_expr = " AND ".join(sorted(real_ids))
+    elif "NOASSERTION" in license_ids:
+        license_expr = "NOASSERTION"
+    else:
+        license_expr = None
 
     return Component(
         name=_component_name(key_dir, root),

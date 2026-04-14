@@ -147,7 +147,7 @@ def _parse_license(
     """Parse *license_expression* into a boolean.Expression, or return SpdxNoAssertion."""
     from spdx_tools.spdx.model.spdx_no_assertion import SpdxNoAssertion  # type: ignore[import]
 
-    if not license_expression:
+    if not license_expression or license_expression.upper() == "NOASSERTION":
         return SpdxNoAssertion()
     try:
         return licensing.parse(license_expression, validate=True)
