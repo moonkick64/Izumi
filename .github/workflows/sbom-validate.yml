@@ -27,7 +27,7 @@ jobs:
         run: uv sync
 
       - name: Run SBOM tests
-        run: uv run pytest tests/test_sbom/ -v
+        run: uv run pytest tests/test_sbom/ -v -p no:qt
 
       - name: Generate test SBOM (SPDX)
         run: |
