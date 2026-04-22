@@ -82,6 +82,8 @@ class MainWindow(QMainWindow):
         self._classification: Optional[ClassificationResult] = None
         self._components: list[Component] = []
         self._scan_worker: Optional[ScanWorker] = None
+        # User-assigned versions keyed by component directory; persisted across rebuilds
+        self._component_versions: dict[Path, str] = {}
 
         self._build_ui()
         self._build_menu()
@@ -237,7 +239,7 @@ class MainWindow(QMainWindow):
         }
         path_to_cf = {cf.file_info.path: cf for cf in self._classification.all_files}
 
-        for file_path, classification_value, license_id in changes:
+        for file_path, classification_value, license_id, version in changes:
             target_cf = path_to_cf.get(file_path)
             if target_cf is None:
                 continue
@@ -249,8 +251,19 @@ class MainWindow(QMainWindow):
                 target_cf.file_info.copyright_info.spdx_license_id = license_id
             _list_for[new_class].append(target_cf)
 
-        # Rebuild components and refresh view once for all changes
+            # Store version keyed by the file's component directory (survives rebuild)
+            if version is not None:
+                key = next(
+                    (c.directory for c in self._components if file_path in c.files),
+                    file_path.parent,
+                )
+                self._component_versions[key] = version
+
+        # Rebuild components and re-apply user-assigned versions
         self._components = group_into_components(self._classification, self._source_dir)
+        for comp in self._components:
+            if comp.directory in self._component_versions:
+                comp.version = self._component_versions[comp.directory] or None
         self._scan_view.set_data(self._classification, self._components, self._source_dir)
 
     # ── Export flow ───────────────────────────────────────────────────────

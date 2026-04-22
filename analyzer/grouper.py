@@ -151,6 +151,9 @@ def _make_component(
         classification_reason=main_reason,
         license_expression=license_expr,
         copyright_texts=copyrights,
+        confirmed_file_count=sum(
+            1 for cf in cfs if cf.classification == Classification.CONFIRMED
+        ),
     )
 
 

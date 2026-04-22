@@ -48,7 +48,7 @@ class ScanView(QWidget):
 
     review_requested       = Signal(list)   # list[Path] – selected files (empty = all)
     export_requested       = Signal(list)   # list[Component] – all
-    classification_changed = Signal(list)   # list[(Path, Classification.value, license_spdx_id)]
+    classification_changed = Signal(list)   # list[(Path, Classification.value, license_spdx_id, version)]
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -164,6 +164,11 @@ class ScanView(QWidget):
         override_fields.addWidget(QLabel(t("inferred_license_label")))
         self._confirm_license_edit = QLineEdit()
         override_fields.addWidget(self._confirm_license_edit, 1)
+        override_fields.addWidget(QLabel(t("version_label")))
+        self._version_edit = QLineEdit()
+        self._version_edit.setPlaceholderText("e.g. 1.2.11")
+        self._version_edit.setMaximumWidth(120)
+        override_fields.addWidget(self._version_edit)
         self._apply_btn = QPushButton(t("apply_classification_btn"))
         self._apply_btn.clicked.connect(self._on_apply_classification_clicked)
         override_fields.addWidget(self._apply_btn)
@@ -313,6 +318,13 @@ class ScanView(QWidget):
         else:
             self._confirm_license_edit.clear()
 
+        # Pre-fill version from the component that owns this file
+        comp = next(
+            (c for c in self._components if cf.file_info.path in c.files),
+            None,
+        )
+        self._version_edit.setText(comp.version or "" if comp else "")
+
         self._override_group.setVisible(True)
 
     def _on_selection_changed(self) -> None:
@@ -338,8 +350,9 @@ class ScanView(QWidget):
             return
         new_class = self._class_combo.currentText()
         license_id = self._confirm_license_edit.text().strip()
+        version = self._version_edit.text().strip()
         changes = [
-            (self._item_to_file[item].file_info.path, new_class, license_id)
+            (self._item_to_file[item].file_info.path, new_class, license_id, version)
             for item in selected_file_items
         ]
         self.classification_changed.emit(changes)

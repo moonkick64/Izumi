@@ -67,15 +67,16 @@ class SbomView(QWidget):
         root.addWidget(QLabel(t("sbom_title")))
 
         # Component summary table
-        self._table = QTableWidget(0, 4)
+        self._table = QTableWidget(0, 5)
         self._table.setHorizontalHeaderLabels([
             t("col_component"), t("col_classification"),
-            t("col_license"),   t("col_file_count"),
+            t("col_license"),   t("col_version"), t("col_file_count"),
         ])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self._table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         root.addWidget(self._table)
@@ -179,20 +180,22 @@ class SbomView(QWidget):
         proj_font.setBold(True)
 
         for row, comp in enumerate(self._components):
-            # First component: show applied project name+version when set
             if row == 0 and self._applied_proj_name:
-                name = self._applied_proj_name
-                if self._applied_proj_version:
-                    name = f"{name} {self._applied_proj_version}"
-                name_item = QTableWidgetItem(name)
+                # Main project row: name and version in separate columns
+                name_item = QTableWidgetItem(self._applied_proj_name)
                 name_item.setBackground(proj_bg)
                 name_item.setFont(proj_font)
                 self._table.setItem(row, 0, name_item)
+                ver_item = QTableWidgetItem(self._applied_proj_version)
+                ver_item.setBackground(proj_bg)
+                ver_item.setFont(proj_font)
+                self._table.setItem(row, 3, ver_item)
             else:
                 self._table.setItem(row, 0, QTableWidgetItem(comp.name))
+                self._table.setItem(row, 3, QTableWidgetItem(comp.version or ""))
             self._table.setItem(row, 1, QTableWidgetItem(comp.classification.value))
             self._table.setItem(row, 2, QTableWidgetItem(comp.license_expression or t("unknown_license")))
-            self._table.setItem(row, 3, QTableWidgetItem(str(len(comp.files))))
+            self._table.setItem(row, 4, QTableWidgetItem(str(comp.confirmed_file_count)))
 
     # ── Slots ─────────────────────────────────────────────────────────────
 
