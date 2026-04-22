@@ -18,7 +18,7 @@ izumi = "main:main"
 [dependency-groups]
 dev = [
     "ntia-conformance-checker>=5.0.1",
-    "pytest>=8.0.0",
+    "pytest>=9.0.3",
     "pytest-cov>=5.0.0",
     "pytest-qt>=4.5.0",
 ]
