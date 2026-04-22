@@ -1,0 +1,90 @@
+name: SBOM Validation
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  sbom-validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run SBOM tests
+        run: uv run pytest tests/test_sbom/ -v
+
+      - name: Generate test SBOM (SPDX)
+        run: |
+          uv run python - <<'EOF'
+          from pathlib import Path
+          from analyzer.models import Component
+          from analyzer.classifier import Classification
+          from sbom.spdx_writer import write_spdx
+
+          comp = Component(
+              name="example-lib",
+              directory=Path("."),
+              classification=Classification.CONFIRMED,
+              classification_reason="test",
+              license_expression="MIT",
+              files=[Path("main.py")],
+              version="1.0.0",
+          )
+          write_spdx(
+              [comp], Path("test-output.spdx"),
+              project_name="izumi-ci-test", project_version="0.0.0",
+          )
+          print("SPDX generated: test-output.spdx")
+          EOF
+
+      - name: NTIA conformance check (SPDX)
+        run: |
+          uv run python - <<'EOF'
+          from ntia_conformance_checker.ntia_checker import NTIAChecker
+
+          checker = NTIAChecker("test-output.spdx")
+          checker.check_compliance()
+
+          if checker.parsing_errors:
+              print("PARSE ERRORS:")
+              for e in checker.parsing_errors:
+                  print(f"  {e}")
+              raise SystemExit(1)
+
+          print(f"Author      : {'OK' if checker.doc_author else 'MISSING'}")
+          print(f"Timestamp   : {'OK' if checker.doc_timestamp else 'MISSING'}")
+          print(f"Dependencies: {'OK' if checker.dependency_relationships else 'MISSING'}")
+          print(f"Missing names      : {checker.components_without_names or 'none'}")
+          print(f"Missing identifiers: {checker.components_without_identifiers or 'none'}")
+          print(f"Missing versions   : {checker.components_without_versions or 'none (informational)'}")
+          print(f"Missing suppliers  : {checker.components_without_suppliers or 'none (informational)'}")
+
+          # Fail CI for structural issues; version/supplier absence is informational
+          hard_fail = (
+              not checker.doc_author
+              or not checker.doc_timestamp
+              or not checker.dependency_relationships
+              or checker.components_without_names
+              or checker.components_without_identifiers
+          )
+          if hard_fail:
+              raise SystemExit(1)
+
+          print("NTIA structural check passed.")
+          EOF

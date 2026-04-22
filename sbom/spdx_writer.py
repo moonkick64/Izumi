@@ -49,6 +49,8 @@ def write_spdx(
         ActorType,
         CreationInfo,
         Document,
+        ExternalPackageRef,
+        ExternalPackageRefCategory,
         Package,
         Relationship,
         RelationshipType,
@@ -76,15 +78,27 @@ def write_spdx(
     main_spdx_id: str | None = None
     if project_name:
         main_spdx_id = f"SPDXRef-{_spdx_safe_id(project_name)}"
+        main_purl = f"pkg:generic/{project_name}"
+        if project_version:
+            main_purl += f"@{project_version}"
+
         main_pkg = Package(
             spdx_id=main_spdx_id,
             name=project_name,
-            version=project_version or "",
+            version=project_version or None,
+            supplier=SpdxNoAssertion(),
             download_location=SpdxNoAssertion(),
             license_concluded=SpdxNoAssertion(),
             license_declared=SpdxNoAssertion(),
             copyright_text=SpdxNoAssertion(),
             files_analyzed=False,
+            external_references=[
+                ExternalPackageRef(
+                    category=ExternalPackageRefCategory.PACKAGE_MANAGER,
+                    reference_type="purl",
+                    locator=main_purl,
+                )
+            ],
         )
         packages.append(main_pkg)
         relationships.append(
@@ -103,16 +117,28 @@ def write_spdx(
         else:
             copyright_val = SpdxNoAssertion()
 
+        purl = f"pkg:generic/{comp.name}"
+        if comp.version:
+            purl += f"@{comp.version}"
+
         pkg = Package(
             spdx_id=spdx_id,
             name=comp.name,
-            version=comp.version or "",
+            version=comp.version or None,
+            supplier=SpdxNoAssertion(),
             download_location=SpdxNoAssertion(),
             license_concluded=license_val,
             license_declared=license_val,
             copyright_text=copyright_val,
             files_analyzed=False,
             comment=_build_comment(comp),
+            external_references=[
+                ExternalPackageRef(
+                    category=ExternalPackageRefCategory.PACKAGE_MANAGER,
+                    reference_type="purl",
+                    locator=purl,
+                )
+            ],
         )
         packages.append(pkg)
         if main_spdx_id:

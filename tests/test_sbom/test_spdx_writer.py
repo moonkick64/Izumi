@@ -6,6 +6,7 @@ from pathlib import Path
 from analyzer.classifier import Classification
 from analyzer.models import Component
 from sbom.spdx_writer import write_spdx, _spdx_safe_id
+from spdx_tools.spdx.parser import parse_anything
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
@@ -155,3 +156,76 @@ class TestWriteSpdx:
         write_spdx([comp], out)
         content = out.read_text()
         assert "DESCRIBES" in content
+
+    # ── NTIA element tests ───────────────────────────────────────────────
+
+    def test_purl_present_for_component(self, tmp_path):
+        comp = confirmed_component(tmp_path)
+        out = tmp_path / "sbom.spdx"
+        write_spdx([comp], out)
+        content = out.read_text()
+        assert "pkg:generic/zlib" in content
+
+    def test_purl_includes_version_when_known(self, tmp_path):
+        comp = confirmed_component(tmp_path)  # version="1.2.11"
+        out = tmp_path / "sbom.spdx"
+        write_spdx([comp], out)
+        content = out.read_text()
+        assert "pkg:generic/zlib@1.2.11" in content
+
+    def test_version_present_when_known(self, tmp_path):
+        comp = confirmed_component(tmp_path)  # version="1.2.11"
+        out = tmp_path / "sbom.spdx"
+        write_spdx([comp], out)
+        content = out.read_text()
+        assert "PackageVersion: 1.2.11" in content
+
+    def test_version_omitted_when_unknown(self, tmp_path):
+        comp = unknown_component(tmp_path)  # version=None
+        out = tmp_path / "sbom.spdx"
+        write_spdx([comp], out)
+        content = out.read_text()
+        assert "PackageVersion:" not in content
+
+    def test_no_fake_version_placeholder(self, tmp_path):
+        comp = unknown_component(tmp_path)  # version=None
+        out = tmp_path / "sbom.spdx"
+        write_spdx([comp], out)
+        content = out.read_text()
+        # Must not write placeholder strings as fake version values
+        assert "PackageVersion: NOASSERTION" not in content
+        assert "PackageVersion: unknown" not in content
+
+    def test_tag_value_round_trips_through_parser(self, tmp_path):
+        comp = confirmed_component(tmp_path)
+        out = tmp_path / "sbom.spdx"
+        write_spdx([comp], out, project_name="my-firmware", project_version="1.0.0")
+        # Must parse without errors (writer/parser round-trip)
+        doc = parse_anything.parse_file(str(out))
+        names = {p.name for p in doc.packages}
+        assert "zlib" in names
+        assert "my-firmware" in names
+
+    def test_ntia_elements_present_when_version_known(self, tmp_path):
+        from ntia_conformance_checker.ntia_checker import NTIAChecker
+        comp = confirmed_component(tmp_path)  # has version, license, name
+        out = tmp_path / "sbom.spdx"
+        write_spdx([comp], out, project_name="my-firmware", project_version="1.0.0")
+        checker = NTIAChecker(str(out))
+        checker.check_compliance()
+        assert not checker.parsing_errors
+        assert not checker.components_without_names
+        assert not checker.components_without_versions
+        assert not checker.components_without_identifiers
+
+    def test_ntia_reports_missing_version_when_unknown(self, tmp_path):
+        from ntia_conformance_checker.ntia_checker import NTIAChecker
+        comp = unknown_component(tmp_path)  # version=None
+        out = tmp_path / "sbom.spdx"
+        write_spdx([comp], out)
+        checker = NTIAChecker(str(out))
+        checker.check_compliance()
+        assert not checker.parsing_errors
+        # Expected: version missing is reported, not a crash
+        missing_names = [name for name, _ in checker.components_without_versions]
+        assert "mystery-lib" in missing_names

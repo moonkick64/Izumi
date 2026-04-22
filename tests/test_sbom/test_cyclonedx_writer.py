@@ -149,3 +149,38 @@ class TestWriteCyclonedx:
         write_cyclonedx([comp], out, output_format="json")
         data = json.loads(out.read_text())
         assert "component" not in data.get("metadata", {})
+
+    # ── NTIA element tests ────────────────────────────────────────────────
+
+    def test_purl_present_for_component(self, tmp_path):
+        comp = make_component("zlib", tmp_path, version="1.2.11")
+        out = tmp_path / "bom.json"
+        write_cyclonedx([comp], out, output_format="json")
+        data = json.loads(out.read_text())
+        purls = [c.get("purl", "") for c in data.get("components", [])]
+        assert any("pkg:generic/zlib" in p for p in purls)
+
+    def test_purl_includes_version_when_known(self, tmp_path):
+        comp = make_component("zlib", tmp_path, version="1.2.11")
+        out = tmp_path / "bom.json"
+        write_cyclonedx([comp], out, output_format="json")
+        data = json.loads(out.read_text())
+        purls = [c.get("purl", "") for c in data.get("components", [])]
+        assert any("pkg:generic/zlib@1.2.11" in p for p in purls)
+
+    def test_version_omitted_when_unknown(self, tmp_path):
+        comp = make_component("zlib", tmp_path, version=None)
+        out = tmp_path / "bom.json"
+        write_cyclonedx([comp], out, output_format="json")
+        data = json.loads(out.read_text())
+        comps = data.get("components", [])
+        assert len(comps) == 1
+        assert "version" not in comps[0]
+
+    def test_no_fake_version_placeholder(self, tmp_path):
+        comp = make_component("zlib", tmp_path, version=None)
+        out = tmp_path / "bom.json"
+        write_cyclonedx([comp], out, output_format="json")
+        data = json.loads(out.read_text())
+        comps = data.get("components", [])
+        assert comps[0].get("version") not in ("NOASSERTION", "unknown", "")

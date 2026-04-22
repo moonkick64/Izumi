@@ -1,0 +1,32 @@
+name: Security
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "0 3 * * 1"  # 毎週月曜 03:00 UTC
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Export dependencies
+        run: uv export --format requirements-txt --no-dev -o requirements.txt
+
+      - name: Run pip-audit
+        run: uvx pip-audit -r requirements.txt

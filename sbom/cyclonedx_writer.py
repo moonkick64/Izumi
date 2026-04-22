@@ -82,10 +82,18 @@ def _build_cdx_component(
 ) -> object:
     """Build a CycloneDX Component from an Izumi Component."""
     from cyclonedx.model.license import DisjunctiveLicense  # type: ignore[import]
+    from packageurl import PackageURL  # type: ignore[import]
+
+    purl = PackageURL(
+        type="generic",
+        name=comp.name,
+        version=comp.version or None,
+    )
 
     kwargs: dict = {
         "type": ComponentType.LIBRARY,
         "name": comp.name,
+        "purl": purl,
     }
     if comp.version:
         kwargs["version"] = comp.version

@@ -735,6 +735,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "ntia-conformance-checker" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-qt" },
@@ -751,6 +752,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "ntia-conformance-checker", specifier = ">=5.0.1" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-cov", specifier = ">=5.0.0" },
     { name = "pytest-qt", specifier = ">=4.5.0" },
@@ -1207,6 +1209,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/0c/f7/addf1087b860ac60e6f382240f64fb99f8bfb532bb06f7c542b83c29ca61/multidict-6.7.1-cp314-cp314t-win_amd64.whl", hash = "sha256:497bde6223c212ba11d462853cfa4f0ae6ef97465033e7dc9940cdb3ab5b48e5", size = 53542, upload-time = "2026-01-26T02:46:08.809Z" },
     { url = "https://files.pythonhosted.org/packages/4c/81/4629d0aa32302ef7b2ec65c75a728cc5ff4fa410c50096174c1632e70b3e/multidict-6.7.1-cp314-cp314t-win_arm64.whl", hash = "sha256:2bbd113e0d4af5db41d5ebfe9ccaff89de2120578164f86a5d17d5a576d1e5b2", size = 44719, upload-time = "2026-01-26T02:46:11.146Z" },
     { url = "https://files.pythonhosted.org/packages/81/08/7036c080d7117f28a4af526d794aab6a84463126db031b007717c1a6676e/multidict-6.7.1-py3-none-any.whl", hash = "sha256:55d97cc6dae627efa6a6e548885712d4864b81110ac76fa4e534c03819fa4a56", size = 12319, upload-time = "2026-01-26T02:46:44.004Z" },
+]
+
+[[package]]
+name = "ntia-conformance-checker"
+version = "5.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "spdx-python-model" },
+    { name = "spdx-tools" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a4/92/f17abe86464a7e3c50d0d18d8b51aa3086033953c61ef52621e1d84fcbcf/ntia_conformance_checker-5.0.1.tar.gz", hash = "sha256:46021a88af687c8e6ba4c8552c96944500647eca862a684fb8e46ab546e5ff93", size = 4226293, upload-time = "2026-04-06T13:26:50.193Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4b/bd/2ce418c4654ea0cfad890936abf8edc7ccca09df981027dcc683a24058a6/ntia_conformance_checker-5.0.1-py3-none-any.whl", hash = "sha256:dd67c694f2d0651b3dc132c63037c0c0f9bc939d44248472ae4a6105d2f4021a", size = 30446, upload-time = "2026-04-06T13:26:49.048Z" },
 ]
 
 [[package]]
@@ -1947,6 +1962,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e8/c4/ba2f8066cceb6f23394729afe52f3bf7adec04bf9ed2c820b39e19299111/sortedcontainers-2.4.0.tar.gz", hash = "sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88", size = 30594, upload-time = "2021-05-16T22:03:42.897Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl", hash = "sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0", size = 29575, upload-time = "2021-05-16T22:03:41.177Z" },
+]
+
+[[package]]
+name = "spdx-python-model"
+version = "0.0.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/68/11/43a4a60f929d41a3e681763728bbba6acf5f3997e68c355551b740d1a9c9/spdx_python_model-0.0.4.tar.gz", hash = "sha256:bdec725398babcbdd4bcb7c16cf23497d06a48d0ef3ea1edb19a3b0d431ab8c1", size = 52926, upload-time = "2025-12-18T20:07:47.927Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/83/c0f79ef2906cde027067c69c5c4f157c30c01ef3b73286128ffea3a9f753/spdx_python_model-0.0.4-py3-none-any.whl", hash = "sha256:64838eb98252ffbb2785ae3a42986a115dc0873a7550d0ff84f7487e99e2b44e", size = 51651, upload-time = "2025-12-18T20:07:46.412Z" },
 ]
 
 [[package]]
