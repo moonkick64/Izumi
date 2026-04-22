@@ -25,6 +25,13 @@ gui = [
     "pytest-qt>=4.5.0",
 ]
 
+[tool.uv]
+constraint-dependencies = [
+    "lxml>=6.1.0",
+    "pygments>=2.20.0",
+    "requests>=2.33.0",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
