@@ -24,10 +24,10 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --no-group gui
 
       - name: Run SBOM tests
-        run: uv run pytest tests/test_sbom/ -v -p no:qt
+        run: uv run pytest tests/test_sbom/ -v
 
       - name: Generate test SBOM (SPDX)
         run: |

@@ -738,6 +738,8 @@ dev = [
     { name = "ntia-conformance-checker" },
     { name = "pytest" },
     { name = "pytest-cov" },
+]
+gui = [
     { name = "pytest-qt" },
 ]
 
@@ -755,8 +757,8 @@ dev = [
     { name = "ntia-conformance-checker", specifier = ">=5.0.1" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
-    { name = "pytest-qt", specifier = ">=4.5.0" },
 ]
+gui = [{ name = "pytest-qt", specifier = ">=4.5.0" }]
 
 [[package]]
 name = "jinja2"
