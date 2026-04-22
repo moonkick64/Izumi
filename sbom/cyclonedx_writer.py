@@ -100,6 +100,14 @@ def _build_cdx_component(
 
     cdx_comp = CdxComponent(**kwargs)
 
+    # Attach supplier
+    if comp.supplier:
+        try:
+            from cyclonedx.model.contact import OrganizationalEntity  # type: ignore[import]
+            cdx_comp.supplier = OrganizationalEntity(name=comp.supplier)
+        except Exception:
+            pass
+
     # Attach license (skip NOASSERTION – CycloneDX has no equivalent field value;
     # omitting the license entry is the correct representation for unknown licenses)
     if comp.license_expression and comp.license_expression.upper() != "NOASSERTION":

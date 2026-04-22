@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -49,6 +49,7 @@ class SbomView(QWidget):
         self._components: list[Component] = []
         self._applied_proj_name: str = ""
         self._applied_proj_version: str = ""
+        self._selected_comp_idx: int | None = None
         self._build_ui()
 
     # ── Public API ────────────────────────────────────────────────────────
@@ -79,7 +80,35 @@ class SbomView(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.itemSelectionChanged.connect(self._on_component_selected)
         root.addWidget(self._table)
+
+        # Component detail panel (shown when a row is selected)
+        self._detail_group = QGroupBox(t("component_detail_group"))
+        detail_layout = QVBoxLayout(self._detail_group)
+        row1 = QHBoxLayout()
+        row1.addWidget(QLabel(t("detail_name_label")))
+        self._detail_name_edit = QLineEdit()
+        row1.addWidget(self._detail_name_edit, 2)
+        row1.addWidget(QLabel(t("version_label")))
+        self._detail_version_edit = QLineEdit()
+        self._detail_version_edit.setPlaceholderText("e.g. 1.2.11")
+        row1.addWidget(self._detail_version_edit, 1)
+        detail_layout.addLayout(row1)
+        row2 = QHBoxLayout()
+        row2.addWidget(QLabel(t("inferred_license_label")))
+        self._detail_license_edit = QLineEdit()
+        row2.addWidget(self._detail_license_edit, 2)
+        row2.addWidget(QLabel(t("supplier_label")))
+        self._detail_supplier_edit = QLineEdit()
+        self._detail_supplier_edit.setPlaceholderText(t("supplier_placeholder"))
+        row2.addWidget(self._detail_supplier_edit, 2)
+        detail_layout.addLayout(row2)
+        apply_btn = QPushButton(t("apply_component_btn"))
+        apply_btn.clicked.connect(self._on_apply_component)
+        detail_layout.addWidget(apply_btn, 0, Qt.AlignmentFlag.AlignRight)
+        self._detail_group.setVisible(False)
+        root.addWidget(self._detail_group)
 
         # Project information
         proj_group = QGroupBox(t("project_info_group"))
@@ -156,6 +185,35 @@ class SbomView(QWidget):
         self._applied_proj_name = self._proj_name_edit.text().strip()
         self._applied_proj_version = self._proj_version_edit.text().strip()
         self._refresh_table()
+
+    def _on_component_selected(self) -> None:
+        row = self._table.currentRow()
+        offset = 1 if self._applied_proj_name else 0
+        comp_idx = row - offset
+        if row < 0 or comp_idx < 0 or comp_idx >= len(self._components):
+            self._detail_group.setVisible(False)
+            self._selected_comp_idx = None
+            return
+        comp = self._components[comp_idx]
+        self._selected_comp_idx = comp_idx
+        self._detail_group.setTitle(f"{t('component_detail_group')} — {comp.name}")
+        self._detail_name_edit.setText(comp.name)
+        self._detail_version_edit.setText(comp.version or "")
+        self._detail_license_edit.setText(comp.license_expression or "")
+        self._detail_supplier_edit.setText(comp.supplier or "")
+        self._detail_group.setVisible(True)
+
+    def _on_apply_component(self) -> None:
+        if self._selected_comp_idx is None:
+            return
+        comp = self._components[self._selected_comp_idx]
+        comp.name = self._detail_name_edit.text().strip() or comp.name
+        comp.version = self._detail_version_edit.text().strip() or None
+        comp.license_expression = self._detail_license_edit.text().strip() or None
+        comp.supplier = self._detail_supplier_edit.text().strip() or None
+        current_row = self._table.currentRow()
+        self._refresh_table()
+        self._table.setCurrentCell(current_row, 0)
 
     # ── Helpers ───────────────────────────────────────────────────────────
 

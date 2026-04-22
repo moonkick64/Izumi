@@ -164,9 +164,12 @@ uv run python main.py
 
 ## SBOM出力の補足
 
-- SPDX・CycloneDX ともに各パッケージに `PackageSupplier: NOASSERTION` と PURL（`pkg:generic/{name}@{version}`）を付与する
+- SPDX・CycloneDX ともに各パッケージに PURL（`pkg:generic/{name}@{version}`）を付与する
+- `PackageSupplier` はユーザーが SBOM 出力画面の詳細パネルで入力した場合のみ出力する。未入力時は `NOASSERTION`
 - `PackageVersion` はバージョンが判明している場合のみ出力する。不明な場合はフィールドを省略する（SPDX 2.3 仕様では `PackageVersion` はオプションフィールドであり、`NOASSERTION` は文法上無効なためパーサーエラーになる）
-- NTIA最小要素の対応状況：作成者・タイムスタンプ・コンポーネント名・PURL・依存関係 → 自動で充足。バージョン・供給者 → バージョン不明時は欠落（ユーザーが GUI でバージョンを入力することで補完できる）
+- `project_name` / `project_version` は SPDX の `DocumentName` フィールドに反映する（例: `my-firmware-1.0.0`）。別パッケージとしては追加しない
+- SBOM 出力画面はテーブル（読み取り専用・概要）＋詳細パネル（選択中コンポーネントの編集）の 2 層構造。詳細パネルで Name / Version / License / Supplier を編集できる
+- NTIA最小要素の対応状況：作成者・タイムスタンプ・コンポーネント名・PURL・依存関係 → 自動で充足。バージョン・供給者 → SBOM 出力画面の詳細パネルで入力することで補完できる
 - CI（`sbom-validate.yml`）はパースエラー・名前・PURL・依存関係の欠落を検出したときに失敗し、バージョン・供給者の欠落は情報として出力するのみ
 
 ---

@@ -52,6 +52,7 @@ class Component:
 
     copyright_texts: list[str] = field(default_factory=list)
     version: Optional[str] = None
+    supplier: Optional[str] = None
     confirmed_file_count: int = 0
 
     # ── LLM phase ─────────────────────────────────────────────────────────

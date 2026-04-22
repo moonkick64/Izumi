@@ -96,11 +96,17 @@ def write_spdx(
         if comp.version:
             purl += f"@{comp.version}"
 
+        supplier_val = (
+            Actor(ActorType.ORGANIZATION, comp.supplier)
+            if comp.supplier
+            else SpdxNoAssertion()
+        )
+
         pkg = Package(
             spdx_id=spdx_id,
             name=comp.name,
             version=comp.version or None,
-            supplier=SpdxNoAssertion(),
+            supplier=supplier_val,
             download_location=SpdxNoAssertion(),
             license_concluded=license_val,
             license_declared=license_val,
