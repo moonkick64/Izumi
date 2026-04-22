@@ -130,7 +130,7 @@ def extract_copyright_info(
         for match in _LICENSE_MENTION_RE.finditer(content):
             candidate = re.sub(r'[\s\*/]+$', '', match.group(0).strip())
             # Skip lines that are just "all rights reserved" noise
-            if candidate and candidate not in info.license_candidates:
+            if candidate and guess_spdx_id(candidate) and candidate not in info.license_candidates:
                 info.license_candidates.append(candidate)
 
     return info
