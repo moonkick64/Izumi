@@ -8,7 +8,7 @@ dependencies = [
     "cyclonedx-bom>=7.2.2",
     "libclang>=18.1.1",
     "litellm>=1.82.4,<1.82.7",
-    "pyside6>=6.10.2",
+    "pyside6>=6.11.0",
     "spdx-tools>=0.8.5",
 ]
 
