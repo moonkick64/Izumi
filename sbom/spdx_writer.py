@@ -61,11 +61,17 @@ def write_spdx(
 
     licensing = get_spdx_licensing()
 
+    # Use project_name/version in the document name (metadata only, not a package)
+    if project_name:
+        doc_name = f"{project_name}-{project_version}" if project_version else project_name
+    else:
+        doc_name = document_name
+
     ns_uuid = uuid.uuid4()
     creation_info = CreationInfo(
         spdx_version="SPDX-2.3",
         spdx_id="SPDXRef-DOCUMENT",
-        name=document_name,
+        name=doc_name,
         document_namespace=f"https://izumi.example.com/sbom/{ns_uuid}",
         creators=[Actor(ActorType.TOOL, "Izumi")],
         created=datetime.now(timezone.utc),
@@ -73,37 +79,6 @@ def write_spdx(
 
     packages: list[Package] = []
     relationships: list[Relationship] = []
-
-    # Main project package (when project_name is provided)
-    main_spdx_id: str | None = None
-    if project_name:
-        main_spdx_id = f"SPDXRef-{_spdx_safe_id(project_name)}"
-        main_purl = f"pkg:generic/{project_name}"
-        if project_version:
-            main_purl += f"@{project_version}"
-
-        main_pkg = Package(
-            spdx_id=main_spdx_id,
-            name=project_name,
-            version=project_version or None,
-            supplier=SpdxNoAssertion(),
-            download_location=SpdxNoAssertion(),
-            license_concluded=SpdxNoAssertion(),
-            license_declared=SpdxNoAssertion(),
-            copyright_text=SpdxNoAssertion(),
-            files_analyzed=False,
-            external_references=[
-                ExternalPackageRef(
-                    category=ExternalPackageRefCategory.PACKAGE_MANAGER,
-                    reference_type="purl",
-                    locator=main_purl,
-                )
-            ],
-        )
-        packages.append(main_pkg)
-        relationships.append(
-            Relationship("SPDXRef-DOCUMENT", RelationshipType.DESCRIBES, main_spdx_id)
-        )
 
     for comp in components:
         spdx_id = f"SPDXRef-{_spdx_safe_id(comp.name)}"
@@ -141,14 +116,9 @@ def write_spdx(
             ],
         )
         packages.append(pkg)
-        if main_spdx_id:
-            relationships.append(
-                Relationship(main_spdx_id, RelationshipType.CONTAINS, spdx_id)
-            )
-        else:
-            relationships.append(
-                Relationship("SPDXRef-DOCUMENT", RelationshipType.DESCRIBES, spdx_id)
-            )
+        relationships.append(
+            Relationship("SPDXRef-DOCUMENT", RelationshipType.DESCRIBES, spdx_id)
+        )
 
     # SPDX validation fails on empty documents; disable it in that case
     should_validate = validate and len(packages) > 0

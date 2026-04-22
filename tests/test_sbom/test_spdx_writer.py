@@ -135,13 +135,14 @@ class TestWriteSpdx:
         content = out.read_text()
         assert "my-firmware" in content
 
-    def test_project_package_contains_components(self, tmp_path):
+    def test_project_name_uses_describes_not_contains(self, tmp_path):
         comp = confirmed_component(tmp_path)
         out = tmp_path / "sbom.spdx"
         write_spdx([comp], out, project_name="my-firmware")
         content = out.read_text()
-        # Main project uses CONTAINS instead of DESCRIBES for OSS components
-        assert "CONTAINS" in content
+        # project_name goes into document name only; components use DESCRIBES
+        assert "DESCRIBES" in content
+        assert "CONTAINS" not in content
 
     def test_project_version_in_output(self, tmp_path):
         comp = confirmed_component(tmp_path)
@@ -204,7 +205,8 @@ class TestWriteSpdx:
         doc = parse_anything.parse_file(str(out))
         names = {p.name for p in doc.packages}
         assert "zlib" in names
-        assert "my-firmware" in names
+        # project_name goes into document name, not a package
+        assert doc.creation_info.name == "my-firmware-1.0.0"
 
     def test_ntia_elements_present_when_version_known(self, tmp_path):
         from ntia_conformance_checker.ntia_checker import NTIAChecker
