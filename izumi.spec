@@ -1,8 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import glob
+import os
 import sys
 from pathlib import Path
+
+# Locate litellm package directory at build time
+import litellm as _litellm_pkg
+_litellm_dir = Path(_litellm_pkg.__file__).parent
 
 # Find libclang dynamically — path differs between Linux (.so) and Windows (.dll)
 _libclang = next(
@@ -19,6 +24,8 @@ a = Analysis(
     datas=[
         ("i18n/en.json", "i18n"),
         ("i18n/ja.json", "i18n"),
+        # litellm reads this JSON at import time; must be bundled explicitly
+        (str(_litellm_dir / "model_prices_and_context_window_backup.json"), "litellm"),
     ],
     hiddenimports=[
         # clang is imported inside try/except so PyInstaller misses it
