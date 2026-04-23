@@ -21,7 +21,7 @@
   "license_analysis_error": "LICENSE解析エラー: {message}",
   "license_analysis_error_title": "LICENSE解析エラー",
   "prompt_license_system": "あなたはソフトウェアライセンスの専門家です。提供されたライセンステキストからSPDXライセンス識別子を特定してください。SPDXの識別子のみ（例: MIT, Apache-2.0, GPL-2.0-only, Zlib, BSD-2-Clause）で回答してください。確信を持って特定できない場合はNOASSERTIONと回答してください。識別子のみを出力し、他のテキストは含めないでください。",
-  "prompt_license_user": "以下のライセンステキストのSPDX識別子を特定してください:\n\n{license_text}",
+  "prompt_license_user": "以下のライセンステキストのSPDX識別子を特定してください:",
   "scan_start_btn": "スキャン開始",
   "browse_source_dialog": "スキャン対象ディレクトリを選択",
   "invalid_path_title": "パスが無効",

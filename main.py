@@ -10,6 +10,7 @@ Usage:
 """
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
@@ -34,9 +35,19 @@ def main() -> int:
         action="store_true",
         help="Print per-file classification details.",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging output.",
+    )
     args = parser.parse_args()
 
     if args.source_dir is None:
+        if args.debug:
+            logging.basicConfig(
+                level=logging.DEBUG,
+                format="[%(name)s] %(message)s",
+            )
         from PySide6.QtWidgets import QApplication
         from gui.main_window import MainWindow
         app = QApplication(sys.argv)

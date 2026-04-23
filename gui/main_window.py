@@ -4,8 +4,11 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Optional
+
+_log = logging.getLogger(__name__)
 
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QAction, QCloseEvent
@@ -82,16 +85,21 @@ class LicenseAnalysisWorker(QThread):
     def run(self) -> None:
         from llm.license_analyzer import analyze_license_text
         total = len(self.license_files)
+        _log.debug("start: %d file(s), model=%s, api_base=%r", total, self.model, self.api_base)
         for i, lf in enumerate(self.license_files, 1):
             self.progress.emit(i, total)
+            _log.debug("(%d/%d) analyzing: %s", i, total, lf)
             try:
                 text = lf.read_text(errors='replace')
                 spdx_id = analyze_license_text(text, self.model, self.api_base, self.api_key)
+                _log.debug("result: %s -> %r", lf.name, spdx_id)
             except Exception as exc:
+                _log.debug("error: %s -> %s", lf.name, exc)
                 self.error.emit(str(exc))
                 spdx_id = "NOASSERTION"
             self.result.emit(lf, spdx_id)
         self.finished.emit()
+        _log.debug("done")
 
 
 # ── Page indices ──────────────────────────────────────────────────────────
@@ -305,6 +313,25 @@ class MainWindow(QMainWindow):
         for comp in comps:
             if comp.license_expression in (None, "NOASSERTION"):
                 comp.license_expression = spdx_id
+                if self._classification:
+                    comp_paths = set(comp.files)
+                    _list_for = {
+                        Classification.CONFIRMED: self._classification.confirmed,
+                        Classification.INFERRED:  self._classification.inferred,
+                        Classification.UNKNOWN:   self._classification.unknown,
+                    }
+                    to_promote = [
+                        cf for cf in self._classification.all_files
+                        if cf.file_info.path in comp_paths
+                        and not cf.file_info.copyright_info.spdx_license_id
+                    ]
+                    for cf in to_promote:
+                        cf.file_info.copyright_info.spdx_license_id = spdx_id
+                        _list_for[cf.classification].remove(cf)
+                        cf.classification = Classification.CONFIRMED
+                        cf.reason = f"LICENSE file identified by LLM: {license_file.name} ({spdx_id})"
+                        _list_for[Classification.CONFIRMED].append(cf)
+                        _log.debug("promoted: %s -> CONFIRMED (%s)", cf.file_info.path.name, spdx_id)
         if comps and self._classification is not None:
             self._scan_view.set_data(self._classification, self._components, self._source_dir)
 
