@@ -1,13 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import glob
-import os
 import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_all, copy_metadata
 
-# Locate litellm package directory at build time
-import litellm as _litellm_pkg
-_litellm_dir = Path(_litellm_pkg.__file__).parent
+# Bundle all of litellm and tiktoken to avoid hidden-import/data-file issues
+_litellm_datas, _litellm_binaries, _litellm_hiddenimports = collect_all("litellm")
+_tiktoken_datas, _tiktoken_binaries, _tiktoken_hiddenimports = collect_all("tiktoken")
+_tiktoken_ext_datas, _tiktoken_ext_binaries, _tiktoken_ext_hiddenimports = collect_all("tiktoken_ext")
+# tiktoken discovers encodings via importlib.metadata entry points; copy metadata so plugins are found
+_tiktoken_meta = copy_metadata("tiktoken")
 
 # Find libclang dynamically — path differs between Linux (.so) and Windows (.dll)
 _libclang = next(
@@ -15,7 +18,11 @@ _libclang = next(
      if Path(p).suffix in (".so", ".dll")),
     None,
 )
-_binaries = [(_libclang, "clang/native")] if _libclang else []
+_binaries = (
+    [(_libclang, "clang/native"), *_litellm_binaries, *_tiktoken_binaries, *_tiktoken_ext_binaries]
+    if _libclang else
+    [*_litellm_binaries, *_tiktoken_binaries, *_tiktoken_ext_binaries]
+)
 
 a = Analysis(
     ['main.py'],
@@ -24,14 +31,22 @@ a = Analysis(
     datas=[
         ("i18n/en.json", "i18n"),
         ("i18n/ja.json", "i18n"),
-        # litellm reads this JSON at import time; must be bundled explicitly
-        (str(_litellm_dir / "model_prices_and_context_window_backup.json"), "litellm"),
+        *_litellm_datas,
+        *_tiktoken_datas,
+        *_tiktoken_ext_datas,
+        *_tiktoken_meta,
     ],
     hiddenimports=[
         # clang is imported inside try/except so PyInstaller misses it
         "clang",
         "clang.cindex",
         "clang.enumerations",
+        # tiktoken encoding plugins are discovered via entry points
+        "tiktoken_ext",
+        "tiktoken_ext.openai_public",
+        *_litellm_hiddenimports,
+        *_tiktoken_hiddenimports,
+        *_tiktoken_ext_hiddenimports,
     ],
     hookspath=[],
     hooksconfig={},
