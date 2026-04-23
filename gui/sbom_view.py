@@ -7,7 +7,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
@@ -26,7 +25,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from analyzer.classifier import Classification
 from analyzer.models import Component
 from i18n import t
 
@@ -47,8 +45,6 @@ class SbomView(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._components: list[Component] = []
-        self._applied_proj_name: str = ""
-        self._applied_proj_version: str = ""
         self._selected_comp_idx: int | None = None
         self._build_ui()
 
@@ -110,22 +106,6 @@ class SbomView(QWidget):
         self._detail_group.setVisible(False)
         root.addWidget(self._detail_group)
 
-        # Project information
-        proj_group = QGroupBox(t("project_info_group"))
-        proj_layout = QHBoxLayout(proj_group)
-        proj_layout.addWidget(QLabel(t("project_name_label")))
-        self._proj_name_edit = QLineEdit()
-        self._proj_name_edit.setPlaceholderText(t("project_name_placeholder"))
-        proj_layout.addWidget(self._proj_name_edit, 3)
-        proj_layout.addWidget(QLabel(t("project_version_label")))
-        self._proj_version_edit = QLineEdit()
-        self._proj_version_edit.setPlaceholderText(t("project_version_placeholder"))
-        proj_layout.addWidget(self._proj_version_edit, 1)
-        apply_proj_btn = QPushButton(t("apply_project_info_btn"))
-        apply_proj_btn.clicked.connect(self._on_apply_project_info)
-        proj_layout.addWidget(apply_proj_btn)
-        root.addWidget(proj_group)
-
         # Output options
         opt_group = QGroupBox(t("output_settings_group"))
         opt_layout = QVBoxLayout(opt_group)
@@ -181,21 +161,14 @@ class SbomView(QWidget):
 
     # ── Slots ────────────────────────────────────────────────────────────
 
-    def _on_apply_project_info(self) -> None:
-        self._applied_proj_name = self._proj_name_edit.text().strip()
-        self._applied_proj_version = self._proj_version_edit.text().strip()
-        self._refresh_table()
-
     def _on_component_selected(self) -> None:
         row = self._table.currentRow()
-        offset = 1 if self._applied_proj_name else 0
-        comp_idx = row - offset
-        if row < 0 or comp_idx < 0 or comp_idx >= len(self._components):
+        if row < 0 or row >= len(self._components):
             self._detail_group.setVisible(False)
             self._selected_comp_idx = None
             return
-        comp = self._components[comp_idx]
-        self._selected_comp_idx = comp_idx
+        comp = self._components[row]
+        self._selected_comp_idx = row
         self._detail_group.setTitle(f"{t('component_detail_group')} — {comp.name}")
         self._detail_name_edit.setText(comp.name)
         self._detail_version_edit.setText(comp.version or "")
@@ -232,27 +205,11 @@ class SbomView(QWidget):
 
     def _refresh_table(self) -> None:
         self._table.setRowCount(len(self._components))
-
-        proj_bg = QBrush(QColor("#d0d0d0"))
-        proj_font = QFont()
-        proj_font.setBold(True)
-
         for row, comp in enumerate(self._components):
-            if row == 0 and self._applied_proj_name:
-                # Main project row: name and version in separate columns
-                name_item = QTableWidgetItem(self._applied_proj_name)
-                name_item.setBackground(proj_bg)
-                name_item.setFont(proj_font)
-                self._table.setItem(row, 0, name_item)
-                ver_item = QTableWidgetItem(self._applied_proj_version)
-                ver_item.setBackground(proj_bg)
-                ver_item.setFont(proj_font)
-                self._table.setItem(row, 3, ver_item)
-            else:
-                self._table.setItem(row, 0, QTableWidgetItem(comp.name))
-                self._table.setItem(row, 3, QTableWidgetItem(comp.version or ""))
+            self._table.setItem(row, 0, QTableWidgetItem(comp.name))
             self._table.setItem(row, 1, QTableWidgetItem(comp.classification.value))
             self._table.setItem(row, 2, QTableWidgetItem(comp.license_expression or t("unknown_license")))
+            self._table.setItem(row, 3, QTableWidgetItem(comp.version or ""))
             self._table.setItem(row, 4, QTableWidgetItem(str(comp.confirmed_file_count)))
 
     # ── Slots ─────────────────────────────────────────────────────────────
@@ -283,23 +240,14 @@ class SbomView(QWidget):
         out_path = self._ensure_extension(out_path, fmt)
         self._out_edit.setText(str(out_path))
 
-        proj_name    = self._proj_name_edit.text().strip()
-        proj_version = self._proj_version_edit.text().strip()
-
         try:
             if fmt.startswith("spdx"):
                 from sbom.spdx_writer import write_spdx
-                write_spdx(
-                    self._components, out_path,
-                    project_name=proj_name, project_version=proj_version,
-                )
+                write_spdx(self._components, out_path)
             else:
                 from sbom.cyclonedx_writer import write_cyclonedx
                 output_format = "xml" if fmt == "cdx_xml" else "json"
-                write_cyclonedx(
-                    self._components, out_path, output_format=output_format,
-                    project_name=proj_name, project_version=proj_version,
-                )
+                write_cyclonedx(self._components, out_path, output_format=output_format)
 
             QMessageBox.information(
                 self, t("export_complete_title"), t("export_complete_msg", out_path=out_path)
