@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from enum import Enum
 
+from .copyright import guess_spdx_id
 from .scanner import FileInfo, ScanResult
 
 
@@ -10,7 +11,8 @@ class Classification(Enum):
     """Three-tier classification of source file OSS status."""
 
     CONFIRMED = "CONFIRMED"
-    """License/copyright is unambiguously identified (SPDX tag or LICENSE file in same dir)."""
+    """License is unambiguously identified: SPDX tag present, or LICENSE file in same
+    directory whose content can be matched to a known SPDX identifier."""
 
     INFERRED = "INFERRED"
     """Circumstantial evidence suggests OSS origin; human review not required."""
@@ -80,10 +82,20 @@ def _classify_file(fi: FileInfo) -> ClassifiedFile:
 
     # Rule C2: LICENSE file exists in the *same* directory
     if fi.license_file and fi.license_file.parent == fi.path.parent:
-        reason = f"LICENSE file in same directory: {fi.license_file.name}"
-        if ci.all_copyright_texts:
-            reason += f"; {ci.all_copyright_texts[0]}"
-        return ClassifiedFile(fi, Classification.CONFIRMED, reason)
+        try:
+            guessed = guess_spdx_id(fi.license_file.read_text(errors='replace'))
+        except OSError:
+            guessed = None
+        if guessed:
+            reason = f"LICENSE file in same directory: {fi.license_file.name} ({guessed})"
+            if ci.all_copyright_texts:
+                reason += f"; {ci.all_copyright_texts[0]}"
+            return ClassifiedFile(fi, Classification.CONFIRMED, reason)
+        else:
+            reason = f"LICENSE file in same directory but license unidentified: {fi.license_file.name}"
+            if ci.all_copyright_texts:
+                reason += f"; {ci.all_copyright_texts[0]}"
+            return ClassifiedFile(fi, Classification.INFERRED, reason)
 
     # ── INFERRED rules ─────────────────────────────────────────────────────
 

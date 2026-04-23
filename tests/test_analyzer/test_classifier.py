@@ -57,13 +57,24 @@ class TestClassifyFile:
         cf = _classify_file(fi)
         assert cf.classification == Classification.CONFIRMED
 
-    def test_confirmed_license_file_same_dir(self, tmp_path):
+    def test_confirmed_license_file_same_dir_identifiable(self, tmp_path):
         src = tmp_path / "foo.c"
         lic = tmp_path / "LICENSE"
+        lic.write_text("MIT License\nCopyright (c) 2020 Foo", encoding="utf-8")
         fi = make_file_info(path=src, license_file=lic)
         cf = _classify_file(fi)
         assert cf.classification == Classification.CONFIRMED
         assert "LICENSE" in cf.reason
+        assert "MIT" in cf.reason
+
+    def test_inferred_license_file_same_dir_unidentifiable(self, tmp_path):
+        src = tmp_path / "foo.c"
+        lic = tmp_path / "LICENSE"
+        lic.write_text("This software may be used freely.", encoding="utf-8")
+        fi = make_file_info(path=src, license_file=lic)
+        cf = _classify_file(fi)
+        assert cf.classification == Classification.INFERRED
+        assert "unidentified" in cf.reason
 
     def test_not_confirmed_license_file_in_parent_dir(self, tmp_path):
         src = tmp_path / "sub" / "foo.c"
@@ -87,8 +98,10 @@ class TestClassifyFile:
         assert cf.classification == Classification.INFERRED
 
     def test_confirmed_third_party_license_same_dir(self, tmp_path):
-        """LICENSE in same dir takes precedence → CONFIRMED, even in vendor."""
+        """LICENSE in same dir with identifiable license → CONFIRMED, even in vendor."""
         lic = tmp_path / "vendor" / "libz" / "LICENSE"
+        lic.parent.mkdir(parents=True)
+        lic.write_text("Zlib License\nCopyright (c) 1995 Jean-loup Gailly", encoding="utf-8")
         fi = make_file_info(
             path=tmp_path / "vendor" / "libz" / "foo.c",
             third_party_dir="vendor",
@@ -97,6 +110,19 @@ class TestClassifyFile:
         cf = _classify_file(fi)
         assert cf.classification == Classification.CONFIRMED
         assert "LICENSE" in cf.reason
+
+    def test_inferred_third_party_license_same_dir_unidentifiable(self, tmp_path):
+        """LICENSE in same dir but unidentifiable license → INFERRED."""
+        lic = tmp_path / "vendor" / "libz" / "LICENSE"
+        lic.parent.mkdir(parents=True)
+        lic.write_text("Proprietary license terms apply.", encoding="utf-8")
+        fi = make_file_info(
+            path=tmp_path / "vendor" / "libz" / "foo.c",
+            third_party_dir="vendor",
+            license_file=lic,
+        )
+        cf = _classify_file(fi)
+        assert cf.classification == Classification.INFERRED
 
     def test_inferred_third_party_with_parent_license(self, tmp_path):
         """LICENSE in parent dir + third-party dir → INFERRED."""

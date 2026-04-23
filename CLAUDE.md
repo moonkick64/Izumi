@@ -181,6 +181,16 @@ uv run python main.py
 - ライセンスフィールドは既存の `spdx_license_id` を優先し、なければ `guess_spdx_id()` で `license_candidates` の先頭テキストから SPDX ID を推定して事前入力する
 - スキャン結果（分類・コンポーネント）はメモリ上のみに保持される。`~/.izumi/results/` に保存されるのは LLM 解析結果（`llm_results.json`）のみ
 
+### 分類基準
+
+| 分類 | 条件 |
+|------|------|
+| CONFIRMED | `SPDX-License-Identifier` タグあり、または同一ディレクトリの LICENSE ファイルから `guess_spdx_id()` でライセンスが特定できる |
+| INFERRED | LICENSE ファイルはあるがライセンス名を特定できない、copyright 表記あり、またはサードパーティディレクトリ内 |
+| UNKNOWN | 上記のいずれにも該当しない |
+
+- **CONFIRMED は「ライセンスが特定できている」ことを意味する。** LICENSE ファイルが存在するだけでは CONFIRMED にしない（`guess_spdx_id()` で SPDX ID が得られた場合のみ）
+
 ---
 
 ## 未決定事項
