@@ -119,6 +119,7 @@ class MainWindow(QMainWindow):
         self._components: list[Component] = []
         self._scan_worker: Optional[ScanWorker] = None
         self._license_worker: Optional[LicenseAnalysisWorker] = None
+        self._license_error_shown: bool = False
         # User-assigned versions keyed by component directory; persisted across rebuilds
         self._component_versions: dict[Path, str] = {}
         # license_file → components that reference it (built after scan)
@@ -279,6 +280,7 @@ class MainWindow(QMainWindow):
         self._progress_bar.setValue(0)
         self._progress_bar.setVisible(True)
 
+        self._license_error_shown = False
         self._license_worker = LicenseAnalysisWorker(license_files, model, api_base, api_key)
         self._license_worker.progress.connect(self._on_license_progress)
         self._license_worker.result.connect(self._on_license_result)
@@ -316,6 +318,9 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_license_error(self, message: str) -> None:
         self._status_bar.showMessage(t("license_analysis_error", message=message))
+        if not self._license_error_shown:
+            self._license_error_shown = True
+            QMessageBox.warning(self, t("license_analysis_error_title"), message)
 
     @Slot(str)
     def _on_scan_error(self, message: str) -> None:

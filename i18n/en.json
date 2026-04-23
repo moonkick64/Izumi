@@ -19,6 +19,7 @@
   "license_analysis_status": "Analyzing LICENSE files {current}/{total}…",
   "license_analysis_complete": "LICENSE analysis complete ({count} component(s) identified)",
   "license_analysis_error": "LICENSE analysis error: {message}",
+  "license_analysis_error_title": "LICENSE Analysis Error",
   "prompt_license_system": "You are a software licensing expert. Identify the SPDX license identifier from the license text provided. Respond with only the SPDX identifier (e.g. MIT, Apache-2.0, GPL-2.0-only, Zlib, BSD-2-Clause). If you cannot identify the license with confidence, respond with NOASSERTION. Output only the identifier, nothing else.",
   "prompt_license_user": "Identify the SPDX license identifier for the following license text:\n\n{license_text}",
   "scan_start_btn": "Start Scan",
