@@ -263,7 +263,7 @@ class MainWindow(QMainWindow):
         file_to_comp: dict[Path, Component] = {
             fp: comp for comp in components for fp in comp.files
         }
-        lic_to_comps: dict[Path, set[Component]] = {}
+        lic_to_comps: dict[Path, list[Component]] = {}
         for cf in classification.all_files:
             lf = cf.file_info.license_file
             if lf is None:
@@ -271,8 +271,10 @@ class MainWindow(QMainWindow):
             comp = file_to_comp.get(cf.file_info.path)
             if comp is None or comp.license_expression not in (None, "NOASSERTION"):
                 continue
-            lic_to_comps.setdefault(lf, set()).add(comp)
-        return {lf: list(comps) for lf, comps in lic_to_comps.items()}
+            lst = lic_to_comps.setdefault(lf, [])
+            if comp not in lst:
+                lst.append(comp)
+        return lic_to_comps
 
     def _start_license_analysis(self, model: str, api_base: str, api_key: str) -> None:
         license_files = list(self._license_file_to_comps.keys())
