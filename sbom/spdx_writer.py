@@ -154,11 +154,7 @@ def _parse_license(
     try:
         return licensing.parse(license_expression, validate=True)
     except Exception:
-        # Fallback: try without strict validation
-        try:
-            return licensing.parse(license_expression, validate=False)
-        except Exception:
-            return SpdxNoAssertion()
+        return SpdxNoAssertion()
 
 
 def _spdx_safe_id(name: str) -> str:
