@@ -32,7 +32,7 @@ from gui.settings_view import SettingsView
 from i18n import t
 
 
-# ── Background worker ─────────────────────────────────────────────────────
+# ── Background workers ────────────────────────────────────────────────────
 
 class ScanWorker(QThread):
     """Runs scan_tree + classify in a background thread."""
@@ -56,6 +56,42 @@ class ScanWorker(QThread):
             self.finished.emit(scan_result, classification, components)
         except Exception as exc:
             self.error.emit(str(exc))
+
+
+class LicenseAnalysisWorker(QThread):
+    """Sends unidentified LICENSE files to a LLM and emits per-file results."""
+
+    progress = Signal(int, int)        # current, total
+    result   = Signal(object, str)     # license_file Path, SPDX ID
+    finished = Signal()
+    error    = Signal(str)
+
+    def __init__(
+        self,
+        license_files: list[Path],
+        model: str,
+        api_base: str = "",
+        api_key: str = "",
+    ) -> None:
+        super().__init__()
+        self.license_files = license_files
+        self.model = model
+        self.api_base = api_base
+        self.api_key = api_key
+
+    def run(self) -> None:
+        from llm.license_analyzer import analyze_license_text
+        total = len(self.license_files)
+        for i, lf in enumerate(self.license_files, 1):
+            self.progress.emit(i, total)
+            try:
+                text = lf.read_text(errors='replace')
+                spdx_id = analyze_license_text(text, self.model, self.api_base, self.api_key)
+            except Exception as exc:
+                self.error.emit(str(exc))
+                spdx_id = "NOASSERTION"
+            self.result.emit(lf, spdx_id)
+        self.finished.emit()
 
 
 # ── Page indices ──────────────────────────────────────────────────────────
@@ -82,8 +118,11 @@ class MainWindow(QMainWindow):
         self._classification: Optional[ClassificationResult] = None
         self._components: list[Component] = []
         self._scan_worker: Optional[ScanWorker] = None
+        self._license_worker: Optional[LicenseAnalysisWorker] = None
         # User-assigned versions keyed by component directory; persisted across rebuilds
         self._component_versions: dict[Path, str] = {}
+        # license_file → components that reference it (built after scan)
+        self._license_file_to_comps: dict[Path, list[Component]] = {}
 
         self._build_ui()
         self._build_menu()
@@ -205,6 +244,79 @@ class MainWindow(QMainWindow):
         self._scan_view.set_data(classification, components, self._source_dir)
         self._show_page(_PAGE_SCAN)
 
+        # Start LLM license analysis if requested
+        self._license_file_to_comps = self._build_license_file_map(classification, components)
+        if self._license_file_to_comps:
+            sv = self._settings_view
+            if sv.license_analysis_external and sv.external_model:
+                self._start_license_analysis(sv.external_model, "", sv.api_key)
+            elif sv.license_analysis_local and sv.local_model:
+                self._start_license_analysis(sv.local_model, sv.ollama_url, "")
+
+    def _build_license_file_map(
+        self,
+        classification: ClassificationResult,
+        components: list[Component],
+    ) -> dict[Path, list[Component]]:
+        """Map unidentified LICENSE files to the components that reference them."""
+        file_to_comp: dict[Path, Component] = {
+            fp: comp for comp in components for fp in comp.files
+        }
+        lic_to_comps: dict[Path, set[Component]] = {}
+        for cf in classification.all_files:
+            lf = cf.file_info.license_file
+            if lf is None:
+                continue
+            comp = file_to_comp.get(cf.file_info.path)
+            if comp is None or comp.license_expression not in (None, "NOASSERTION"):
+                continue
+            lic_to_comps.setdefault(lf, set()).add(comp)
+        return {lf: list(comps) for lf, comps in lic_to_comps.items()}
+
+    def _start_license_analysis(self, model: str, api_base: str, api_key: str) -> None:
+        license_files = list(self._license_file_to_comps.keys())
+        self._progress_bar.setRange(0, len(license_files))
+        self._progress_bar.setValue(0)
+        self._progress_bar.setVisible(True)
+
+        self._license_worker = LicenseAnalysisWorker(license_files, model, api_base, api_key)
+        self._license_worker.progress.connect(self._on_license_progress)
+        self._license_worker.result.connect(self._on_license_result)
+        self._license_worker.finished.connect(self._on_license_finished)
+        self._license_worker.error.connect(self._on_license_error)
+        self._license_worker.start()
+
+    @Slot(int, int)
+    def _on_license_progress(self, current: int, total: int) -> None:
+        self._progress_bar.setValue(current)
+        self._status_bar.showMessage(
+            t("license_analysis_status", current=current, total=total)
+        )
+
+    @Slot(object, str)
+    def _on_license_result(self, license_file: Path, spdx_id: str) -> None:
+        if spdx_id == "NOASSERTION":
+            return
+        comps = self._license_file_to_comps.get(license_file, [])
+        for comp in comps:
+            if comp.license_expression in (None, "NOASSERTION"):
+                comp.license_expression = spdx_id
+        if comps and self._classification is not None:
+            self._scan_view.set_data(self._classification, self._components, self._source_dir)
+
+    @Slot()
+    def _on_license_finished(self) -> None:
+        self._progress_bar.setVisible(False)
+        identified = sum(
+            1 for comp in self._components
+            if comp.license_expression not in (None, "NOASSERTION")
+        )
+        self._status_bar.showMessage(t("license_analysis_complete", count=identified))
+
+    @Slot(str)
+    def _on_license_error(self, message: str) -> None:
+        self._status_bar.showMessage(t("license_analysis_error", message=message))
+
     @Slot(str)
     def _on_scan_error(self, message: str) -> None:
         self._progress_bar.setVisible(False)
@@ -276,7 +388,8 @@ class MainWindow(QMainWindow):
     # ── Window events ─────────────────────────────────────────────────────
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        if self._scan_worker and self._scan_worker.isRunning():
-            self._scan_worker.quit()
-            self._scan_worker.wait(2000)
+        for worker in (self._scan_worker, self._license_worker):
+            if worker and worker.isRunning():
+                worker.quit()
+                worker.wait(2000)
         event.accept()

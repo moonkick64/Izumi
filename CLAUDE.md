@@ -191,6 +191,15 @@ uv run python main.py
 
 - **CONFIRMED は「ライセンスが特定できている」ことを意味する。** LICENSE ファイルが存在するだけでは CONFIRMED にしない（`guess_spdx_id()` で SPDX ID が得られた場合のみ）
 
+### LLM によるライセンスファイル解析（スキャン時オプション）
+
+- 設定画面のローカル LLM / 外部 LLM グループにチェックボックスがあり、有効にするとスキャン完了後に自動実行される
+- 対象: `license_expression` が `None` または `NOASSERTION` のコンポーネントが参照する LICENSE ファイル
+- `llm/license_analyzer.py` の `analyze_license_text()` が SPDX ID のみを返すプロンプトで LLM に問い合わせる
+- 結果は `Component.license_expression` に即時反映され、スキャン結果画面も更新される
+- 外部 LLM が有効な場合は外部 LLM を優先し、ローカル LLM のみの場合はローカル LLM を使用する
+- プロンプトは `prompt_license_system` / `prompt_license_user` キーで管理（他のプロンプトと同様）
+
 ---
 
 ## 未決定事項

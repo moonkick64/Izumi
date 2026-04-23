@@ -8,6 +8,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFormLayout,
@@ -73,6 +74,9 @@ class SettingsView(QWidget):
         self._local_model_edit = QLineEdit("ollama/codellama")
         local_form.addRow(t("model_label"), self._local_model_edit)
 
+        self._license_local_check = QCheckBox(t("license_analysis_local_label"))
+        local_form.addRow("", self._license_local_check)
+
         root.addWidget(local_group)
 
         # ── External LLM ─────────────────────────────────────────────────
@@ -86,6 +90,9 @@ class SettingsView(QWidget):
         self._api_key_edit.setPlaceholderText(t("api_key_placeholder"))
         self._api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         ext_form.addRow(t("api_key_label"), self._api_key_edit)
+
+        self._license_ext_check = QCheckBox(t("license_analysis_ext_label"))
+        ext_form.addRow("", self._license_ext_check)
 
         root.addWidget(ext_group)
 
@@ -176,3 +183,11 @@ class SettingsView(QWidget):
     @property
     def api_key(self) -> str:
         return self._api_key_edit.text().strip()
+
+    @property
+    def license_analysis_local(self) -> bool:
+        return self._license_local_check.isChecked()
+
+    @property
+    def license_analysis_external(self) -> bool:
+        return self._license_ext_check.isChecked()
